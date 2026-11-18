@@ -1,0 +1,14 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+  errors:
+    # Flutter 3.47+ marca package:flutter/material.dart como obsoleto (migração para material_ui).
+    # Continua funcionando; a migração pode ser feita depois.
+    deprecated_member_use: ignore
+
+linter:
+  rules:
+    use_build_context_synchronously: false

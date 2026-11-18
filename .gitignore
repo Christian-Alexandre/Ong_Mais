@@ -1,0 +1,39 @@
+# --- Segredos / ambiente local ---
+api/.env
+api/.env.*.bak
+*.env.local
+
+# --- Logs gerados pelos scripts ---
+api_log.txt
+saida_*.txt
+
+# --- Python / API ---
+api/.venv/
+api/*.db
+api/instance/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# --- IDEs ---
+.idea/
+.vscode/
+*.iml
+
+# --- Flutter / Android ---
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/android/.gradle/
+app/android/.kotlin/
+app/android/app/.cxx/
+app/android/local.properties
+app/android/key.properties
+app/android/**/GeneratedPluginRegistrant.java
+app/android/gradlew
+app/android/gradlew.bat
+app/android/gradle/wrapper/gradle-wrapper.jar
+
+*.local.sql

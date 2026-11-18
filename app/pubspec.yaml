@@ -1,0 +1,32 @@
+name: ong_mais
+description: Conecta voluntários a ONGs por geolocalização.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  flutter_secure_storage: ^11.2.0
+  google_maps_flutter: ^2.19.0
+  geolocator: ^14.1.2
+  image_picker: ^1.2.4
+  url_launcher: ^6.3.3
+  intl: ^0.20.3
+  # Fallback de mapa (OpenStreetMap) caso a chave do Google Maps não funcione
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
