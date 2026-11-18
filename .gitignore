@@ -37,3 +37,8 @@ app/android/gradlew.bat
 app/android/gradle/wrapper/gradle-wrapper.jar
 
 *.local.sql
+
+# APK gerado (distribuir pelo GitHub Releases)
+*.apk
+telas/
+mensagem_commit.txt

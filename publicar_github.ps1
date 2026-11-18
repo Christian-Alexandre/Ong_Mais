@@ -83,10 +83,14 @@ Reconstrucao do ONG Mais: API Flask + app Flutter
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01KAnntMtmy2ayX2JRmU8mE5
 "@
+    # Mensagem personalizada: se existir mensagem_commit.txt na pasta, ela e usada (e apagada depois)
+    $arqMsg = Join-Path $PSScriptRoot 'mensagem_commit.txt'
+    if (Test-Path $arqMsg) { $msg = [IO.File]::ReadAllText($arqMsg) }
     $tmp = Join-Path $env:TEMP 'ong_mais_commit.txt'
     [IO.File]::WriteAllText($tmp, $msg, $utf8)
     git commit -q -F $tmp 2>&1 | ForEach-Object { L $_ }
     Remove-Item $tmp -ErrorAction SilentlyContinue
+    if ($LASTEXITCODE -eq 0) { Remove-Item $arqMsg -ErrorAction SilentlyContinue }
 }
 L (git log --oneline -1)
 

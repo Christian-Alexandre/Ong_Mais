@@ -89,9 +89,18 @@ def _registrar_cli(app: Flask):
             db.drop_all()
             db.create_all()
         else:
-            from flask_migrate import downgrade, upgrade
+            # Apaga todas as tabelas (inclusive alembic_version) ignorando as FKs
+            # e recria pelas migrations - funciona mesmo com o banco pela metade.
+            from flask_migrate import upgrade
+            from sqlalchemy import MetaData, text
 
-            downgrade(revision="base")
+            meta = MetaData()
+            meta.reflect(bind=db.engine)
+            with db.engine.begin() as con:
+                con.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+                for tabela in meta.sorted_tables:
+                    con.execute(text(f"DROP TABLE IF EXISTS `{tabela.name}`"))
+                con.execute(text("SET FOREIGN_KEY_CHECKS=1"))
             upgrade()
         from .seed import semear
 

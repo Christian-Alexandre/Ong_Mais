@@ -10,7 +10,11 @@ Set-Location (Join-Path $raiz 'app')
 function DispositivoAndroid {
     $json = flutter devices --machine 2>$null | Out-String
     try { $lista = $json | ConvertFrom-Json } catch { return $null }
-    return $lista | Where-Object { $_.targetPlatform -like 'android*' } | Select-Object -First 1
+    $android = @($lista | Where-Object { $_.targetPlatform -like 'android*' })
+    # Prefere o celular fisico (USB) quando o emulador tambem estiver aberto
+    $fisico = $android | Where-Object { -not $_.emulator } | Select-Object -First 1
+    if ($fisico) { return $fisico }
+    return $android | Select-Object -First 1
 }
 
 "=== $(Get-Date) ===" | Out-File $log -Encoding utf8

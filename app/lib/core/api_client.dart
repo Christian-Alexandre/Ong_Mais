@@ -42,6 +42,8 @@ class ApiClient {
   Map<String, String> _headers() => {
         'Content-Type': 'application/json; charset=utf-8',
         'Accept': 'application/json',
+        // Evita a pagina de aviso do ngrok (plano gratis) quando a API passa pelo tunel
+        'ngrok-skip-browser-warning': '1',
         if (Session.instance.token != null) 'Authorization': 'Bearer ${Session.instance.token}',
       };
 

@@ -28,8 +28,13 @@ class AppConfig {
       await _storage.delete(key: _kServidor);
       return;
     }
-    if (!u.startsWith('http')) u = 'http://$u';
-    if (!RegExp(r':\d+$').hasMatch(u.replaceAll(RegExp(r'/+$'), ''))) u = '${u.replaceAll(RegExp(r'/+$'), '')}:5000';
+    if (!u.startsWith('http')) {
+      // Sem protocolo: endereco de tunel (ex.: algo.ngrok-free.dev) usa https; IP da rede usa http
+      u = RegExp(r'^[\d.]+(:\d+)?/*$').hasMatch(u) || u.startsWith('localhost') ? 'http://$u' : 'https://$u';
+    }
+    u = u.replaceAll(RegExp(r'/+$'), '');
+    // Porta 5000 so para http sem porta (IP do PC na rede); https (tunel) usa a porta padrao
+    if (u.startsWith('http://') && !RegExp(r':\d+$').hasMatch(u)) u = '$u:5000';
     apiBaseUrl = u;
     await _storage.write(key: _kServidor, value: u);
   }

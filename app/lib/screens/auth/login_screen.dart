@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: ctrl,
             keyboardType: TextInputType.url,
             autocorrect: false,
-            decoration: const InputDecoration(prefixIcon: Icon(Icons.dns_outlined), hintText: 'http://192.168.0.10:5000'),
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.dns_outlined), hintText: 'dismiss-duct-vacate.ngrok-free.dev ou 192.168.0.10'),
           ),
           const SizedBox(height: 6),
           const Text('Deixe vazio para voltar ao padrão do build.', style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
