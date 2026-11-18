@@ -61,6 +61,18 @@ git add -A 2>&1 | Out-Null
 $vazou = @()
 $vazou += git grep --cached -I -l -E 'AIza[0-9A-Za-z_-]{20,}' 2>$null
 $vazou += git ls-files | Where-Object { $_ -match '(^|/)\.env$' -or $_ -match 'local\.properties$' -or $_ -match '\.db$' }
+# APK publicado: nao pode levar a chave do Google Maps dentro
+foreach ($apkRel in (git ls-files -- '*.apk')) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $PSScriptRoot $apkRel))
+    try {
+        $ent = $zip.GetEntry('AndroidManifest.xml')
+        $ms = New-Object IO.MemoryStream; $st = $ent.Open(); $st.CopyTo($ms); $st.Close()
+        $b = $ms.ToArray()
+        $txt = [Text.Encoding]::Unicode.GetString($b) + [Text.Encoding]::ASCII.GetString($b)
+        if ($txt -match 'AIza[0-9A-Za-z_-]{20,}') { $vazou += "$apkRel (chave do Google Maps no APK; gere de novo com gerar_apk)" }
+    } finally { $zip.Dispose() }
+}
 $vazou = $vazou | Where-Object { $_ } | Sort-Object -Unique
 if ($vazou) {
     git reset -q 2>&1 | Out-Null

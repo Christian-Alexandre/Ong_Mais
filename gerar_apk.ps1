@@ -21,6 +21,8 @@ $dominioNgrok = 'dismiss-duct-vacate.ngrok-free.dev'
 $urlApi = if ($dominioNgrok) { "https://$dominioNgrok" } else { "http://${ip}:5000" }
 L "API_BASE_URL embutido: $urlApi"
 
+# APK sem a chave do Google Maps (o app usa OpenStreetMap): pode ser publicado no GitHub
+$env:ONG_SEM_CHAVE_MAPS = '1'
 Set-Location (Join-Path $raiz 'app')
 L 'Compilando (release)... pode levar alguns minutos.' 'Cyan'
 flutter build apk --release "--dart-define=API_BASE_URL=$urlApi" "--dart-define=USAR_GOOGLE_MAPS=false" 2>&1 |
@@ -32,6 +34,11 @@ $destino = Join-Path $raiz 'ONG_Mais.apk'
 Copy-Item $apk $destino -Force
 $mb = [math]::Round((Get-Item $destino).Length / 1MB, 1)
 L "APK pronto: $destino ($mb MB)" 'Green'
+# Copia para releases\ (versionada no GitHub, para baixar direto no celular)
+$pastaRel = Join-Path $raiz 'releases'
+New-Item -ItemType Directory -Force $pastaRel | Out-Null
+Copy-Item $apk (Join-Path $pastaRel 'ONG_Mais.apk') -Force
+L "Copia para o GitHub: releases\ONG_Mais.apk" 'Green'
 
 # Instala nos aparelhos conectados
 $devs = adb devices | Select-String '\tdevice$' | ForEach-Object { ($_ -split '\t')[0] }

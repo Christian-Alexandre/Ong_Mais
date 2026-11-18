@@ -36,7 +36,10 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY", "")
+        // ONG_SEM_CHAVE_MAPS=1 (usado pelo gerar_apk): APK sem a chave do Google Maps, seguro para publicar.
+        // O app usa OpenStreetMap por padrao, entao a chave nao faz falta.
+        manifestPlaceholders["MAPS_API_KEY"] =
+            if (System.getenv("ONG_SEM_CHAVE_MAPS") == "1") "" else localProps.getProperty("MAPS_API_KEY", "")
     }
 
     buildTypes {

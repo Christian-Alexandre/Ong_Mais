@@ -40,5 +40,6 @@ app/android/gradle/wrapper/gradle-wrapper.jar
 
 # APK gerado (distribuir pelo GitHub Releases)
 *.apk
+!releases/ONG_Mais.apk
 telas/
 mensagem_commit.txt
