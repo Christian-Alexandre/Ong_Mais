@@ -111,3 +111,32 @@ def test_cadastros(client):
     r = client.post("/auth/registro/ong", json={**base, "cnpj": "11.222.333/0001-81"})
     assert r.status_code == 201, r.get_json()
     assert r.get_json()["perfil"]["whatsapp"] == "11912345678"
+
+
+def test_comentarios(client):
+    ong = _login(client, "contato@patinhascarentes.org.br")
+    vol = _login(client, "voluntario@teste.com")
+    camp = client.get("/campanhas", headers=vol).get_json()[0]
+    cid = camp["id"]
+    assert camp["comentarios"] == 0
+
+    # vazio e validação
+    assert client.post(f"/campanhas/{cid}/comentarios", json={"texto": ""}, headers=vol).status_code == 422
+
+    # voluntário comenta, ONG dona responde
+    r = client.post(f"/campanhas/{cid}/comentarios", json={"texto": "Posso levar meu filho?"}, headers=vol)
+    assert r.status_code == 201
+    c1 = r.get_json()
+    assert c1["autor_nome"] == "Lucas Silva" and c1["pode_apagar"] and c1["criado_em"].endswith("Z")
+    r = client.post(f"/campanhas/{cid}/comentarios", json={"texto": "Pode sim!"}, headers=ong)
+    assert r.status_code == 201 and r.get_json()["autor_papel"] == "ONG"
+
+    lista = client.get(f"/campanhas/{cid}/comentarios", headers=vol).get_json()
+    assert [c["texto"] for c in lista] == ["Posso levar meu filho?", "Pode sim!"]
+    assert lista[1]["pode_apagar"] is False  # voluntário não apaga o da ONG
+    assert client.get(f"/campanhas/{cid}", headers=vol).get_json()["comentarios"] == 2
+
+    # voluntário não apaga comentário da ONG; ONG (dona) modera o do voluntário
+    assert client.delete(f"/campanhas/comentarios/{lista[1]['id']}", headers=vol).status_code == 403
+    assert client.delete(f"/campanhas/comentarios/{c1['id']}", headers=ong).status_code == 200
+    assert len(client.get(f"/campanhas/{cid}/comentarios", headers=vol).get_json()) == 1

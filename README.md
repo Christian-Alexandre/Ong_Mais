@@ -5,7 +5,8 @@
 Aplicativo Android que conecta voluntários a ONGs por geolocalização. A ONG publica campanhas
 (voluntariado, doação ou financeiro); o voluntário encontra pelo feed ou pelo mapa, toca em
 **Quero Ajudar** e fala com a ONG pelo WhatsApp; a ONG aprova, recusa ou conclui a inscrição
-registrando as horas doadas. Especificação: `ONG_MAIS_ESPECIFICACAO.md`.
+registrando as horas doadas. Voluntários comentam nas campanhas e a ONG responde e modera os
+comentários pelo próprio painel. Especificação: `ONG_MAIS_ESPECIFICACAO.md`.
 
 | Pasta  | O que é | Detalhes |
 |--------|---------|----------|
@@ -32,7 +33,8 @@ endereço do ngrok ou digite o IP do PC (ex.: `192.168.0.10`) para usar só na r
 | Script | Para quê |
 |--------|----------|
 | `iniciar_tunel.cmd` | API + túnel ngrok (instala/atualiza o ngrok e pede o authtoken na 1ª vez) |
-| `iniciar_api.cmd` | Só a API, na rede local (log em `api_log.txt`) |
+| `iniciar_api.cmd` | Só a API, na rede local; aplica as migrações do MySQL ao subir (log em `api_log.txt`) |
+| `atualizar_api.cmd` | Reinicia a API para carregar código novo, sem apagar dados (o túnel pode ficar aberto) |
 | `gerar_apk.cmd` | Gera o `ONG_Mais.apk` de release e instala nos aparelhos conectados |
 | `app_celular.cmd` | Roda o app em modo de desenvolvimento (celular USB ou emulador) |
 | `limpar_dados.cmd` | Volta o banco ao estado inicial (só as contas de teste) |

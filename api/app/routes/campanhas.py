@@ -5,11 +5,13 @@ from ..extensions import db
 from ..models import (
     PAPEL_VOLUNTARIO,
     STATUS_PENDENTE,
+    PAPEL_ONG,
     Campanha,
+    Comentario,
     Curtida,
     Inscricao,
 )
-from ..schemas import AtualizarCampanhaSchema, CampanhaSchema
+from ..schemas import AtualizarCampanhaSchema, CampanhaSchema, ComentarioSchema
 from ..utils import ONG, VOLUNTARIO, erro, papel_atual, papel_requerido, usuario_id_atual, validar
 
 bp = Blueprint("campanhas", __name__, url_prefix="/campanhas")
@@ -154,3 +156,53 @@ def inscritos(campanha_id: int):
         return err
     lista = sorted(c.inscricoes, key=lambda i: i.criado_em, reverse=True)
     return jsonify([i.to_dict(incluir_campanha=False, incluir_voluntario=True) for i in lista])
+
+
+# ---------- Comentários ----------
+
+@bp.get("/<int:campanha_id>/comentarios")
+@jwt_required()
+def listar_comentarios(campanha_id: int):
+    """Comentários da campanha, do mais antigo para o mais novo."""
+    c = db.session.get(Campanha, campanha_id)
+    if not c:
+        return erro("Campanha não encontrada.", 404)
+    uid = usuario_id_atual()
+    return jsonify([cm.to_dict(usuario_logado=uid) for cm in c.comentarios])
+
+
+@bp.post("/<int:campanha_id>/comentarios")
+@jwt_required()
+def comentar(campanha_id: int):
+    """Voluntários comentam em qualquer campanha; a ONG só nas próprias (para responder)."""
+    c = db.session.get(Campanha, campanha_id)
+    if not c:
+        return erro("Campanha não encontrada.", 404)
+    uid = usuario_id_atual()
+    if papel_atual() == PAPEL_ONG and c.ong_id != uid:
+        return erro("A ONG só pode comentar nas próprias campanhas.", 403)
+    dados, err = validar(ComentarioSchema(), request.get_json(silent=True))
+    if err:
+        return err
+    texto = dados["texto"].strip()
+    if not texto:
+        return erro("Escreva um comentário.", 400)
+    cm = Comentario(campanha_id=campanha_id, usuario_id=uid, texto=texto)
+    db.session.add(cm)
+    db.session.commit()
+    return jsonify(cm.to_dict(usuario_logado=uid)), 201
+
+
+@bp.delete("/comentarios/<int:comentario_id>")
+@jwt_required()
+def apagar_comentario(comentario_id: int):
+    """Apaga: o autor do comentário ou a ONG dona da campanha."""
+    cm = db.session.get(Comentario, comentario_id)
+    if not cm:
+        return erro("Comentário não encontrado.", 404)
+    uid = usuario_id_atual()
+    if uid not in (cm.usuario_id, cm.campanha.ong_id):
+        return erro("Você não pode apagar este comentário.", 403)
+    db.session.delete(cm)
+    db.session.commit()
+    return jsonify({"ok": True})

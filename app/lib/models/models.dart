@@ -98,6 +98,7 @@ class Campanha {
   int curtidas;
   bool curtiu;
   final int inscritos;
+  int comentarios;
   Inscricao? minhaInscricao;
 
   Campanha({
@@ -115,6 +116,7 @@ class Campanha {
     this.curtidas = 0,
     this.curtiu = false,
     this.inscritos = 0,
+    this.comentarios = 0,
     this.minhaInscricao,
   });
 
@@ -133,6 +135,7 @@ class Campanha {
         curtidas: _int(j['curtidas']),
         curtiu: j['curtiu'] == true,
         inscritos: _int(j['inscritos']),
+        comentarios: _int(j['comentarios']),
         minhaInscricao: j['minha_inscricao'] == null ? null : Inscricao.fromJson(j['minha_inscricao']),
       );
 }
@@ -184,5 +187,43 @@ class Inscricao {
         voluntarioNome: j['voluntario_nome'],
         voluntarioEmail: j['voluntario_email'],
         voluntarioInteresses: (j['voluntario_interesses'] as List? ?? []).map((e) => e.toString()).toList(),
+      );
+}
+
+class Comentario {
+  final int id;
+  final int campanhaId;
+  final int usuarioId;
+  final String autorNome;
+  final String? autorPapel;
+  final String? autorLogoBase64;
+  final String texto;
+  final DateTime? criadoEm;
+  final bool podeApagar;
+
+  Comentario({
+    required this.id,
+    required this.campanhaId,
+    required this.usuarioId,
+    required this.autorNome,
+    this.autorPapel,
+    this.autorLogoBase64,
+    required this.texto,
+    this.criadoEm,
+    this.podeApagar = false,
+  });
+
+  bool get daOng => autorPapel == 'ONG';
+
+  factory Comentario.fromJson(Map<String, dynamic> j) => Comentario(
+        id: _int(j['id']),
+        campanhaId: _int(j['campanha_id']),
+        usuarioId: _int(j['usuario_id']),
+        autorNome: j['autor_nome'] ?? 'Usuário',
+        autorPapel: j['autor_papel'],
+        autorLogoBase64: j['autor_logo_base64'],
+        texto: j['texto'] ?? '',
+        criadoEm: parseUtc(j['criado_em']),
+        podeApagar: j['pode_apagar'] == true,
       );
 }

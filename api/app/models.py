@@ -125,6 +125,9 @@ class Campanha(db.Model):
     ong: Mapped[Ong] = relationship(back_populates="campanhas")
     inscricoes: Mapped[list["Inscricao"]] = relationship(back_populates="campanha", cascade="all, delete-orphan")
     curtidas: Mapped[list["Curtida"]] = relationship(back_populates="campanha", cascade="all, delete-orphan")
+    comentarios: Mapped[list["Comentario"]] = relationship(
+        back_populates="campanha", cascade="all, delete-orphan", order_by="Comentario.criado_em"
+    )
 
     def to_dict(self, voluntario_id: int | None = None, incluir_foto: bool = True) -> dict:
         minha_inscricao = None
@@ -150,6 +153,7 @@ class Campanha(db.Model):
             "curtidas": len(self.curtidas),
             "curtiu": curtiu,
             "inscritos": len(self.inscricoes),
+            "comentarios": len(self.comentarios),
             "minha_inscricao": minha_inscricao,
         }
 
@@ -202,3 +206,46 @@ class Curtida(db.Model):
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     campanha: Mapped[Campanha] = relationship(back_populates="curtidas")
+
+
+class Comentario(db.Model):
+    """Comentário em uma campanha. Voluntários e a ONG dona da campanha podem comentar."""
+
+    __tablename__ = "tb_comentarios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campanha_id: Mapped[int] = mapped_column(
+        ForeignKey("tb_campanhas.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("tb_usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    texto: Mapped[str] = mapped_column(Text, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    campanha: Mapped[Campanha] = relationship(back_populates="comentarios")
+    usuario: Mapped[Usuario] = relationship()
+
+    def autor_nome(self) -> str:
+        u = self.usuario
+        if u is None:
+            return "Usuário"
+        if u.papel == PAPEL_ONG and u.ong:
+            return u.ong.nome_fantasia
+        if u.voluntario:
+            return u.voluntario.nome_completo
+        return u.email
+
+    def to_dict(self, usuario_logado: int | None = None) -> dict:
+        u = self.usuario
+        dono_campanha = self.campanha.ong_id if self.campanha else None
+        return {
+            "id": self.id,
+            "campanha_id": self.campanha_id,
+            "usuario_id": self.usuario_id,
+            "autor_nome": self.autor_nome(),
+            "autor_papel": u.papel if u else None,
+            "autor_logo_base64": u.ong.logo_base64 if u and u.papel == PAPEL_ONG and u.ong else None,
+            "texto": self.texto,
+            "criado_em": iso_utc(self.criado_em),
+            # pode apagar: o autor ou a ONG dona da campanha (moderação)
+            "pode_apagar": usuario_logado is not None and usuario_logado in (self.usuario_id, dono_campanha),
+        }

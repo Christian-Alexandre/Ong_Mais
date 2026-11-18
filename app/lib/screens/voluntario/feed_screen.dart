@@ -6,6 +6,7 @@ import '../../core/api_service.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
+import '../../widgets/comentarios_sheet.dart';
 import '../../widgets/common.dart';
 import '../ong/perfil_publico_screen.dart';
 import 'minhas_inscricoes_tab.dart';
@@ -68,6 +69,11 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   void _aoDigitar(String _) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), _carregar);
+  }
+
+  Future<void> _comentar(Campanha c) async {
+    final total = await abrirComentarios(context, c);
+    if (total != null && mounted) setState(() => c.comentarios = total);
   }
 
   Future<void> _curtir(Campanha c) async {
@@ -246,6 +252,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
         itemBuilder: (_, i) => _CardCampanha(
           campanha: _campanhas![i],
           onCurtir: () => _curtir(_campanhas![i]),
+          onComentar: () => _comentar(_campanhas![i]),
           onAjudar: () => _queroAjudar(_campanhas![i]),
           onVerOng: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PerfilPublicoScreen(ongId: _campanhas![i].ongId))),
         ),
@@ -257,9 +264,10 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
 class _CardCampanha extends StatelessWidget {
   final Campanha campanha;
   final VoidCallback onCurtir;
+  final VoidCallback onComentar;
   final VoidCallback onAjudar;
   final VoidCallback onVerOng;
-  const _CardCampanha({required this.campanha, required this.onCurtir, required this.onAjudar, required this.onVerOng});
+  const _CardCampanha({required this.campanha, required this.onCurtir, required this.onComentar, required this.onAjudar, required this.onVerOng});
 
   @override
   Widget build(BuildContext context) {
@@ -297,7 +305,16 @@ class _CardCampanha extends StatelessWidget {
               onPressed: onCurtir,
               icon: Icon(c.curtiu ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: c.curtiu ? AppColors.danger : AppColors.textDark, size: 28),
             ),
-            IconButton(onPressed: () {}, icon: const Icon(Icons.mode_comment_outlined, size: 26)), // visual apenas
+            IconButton(
+              onPressed: onComentar,
+              tooltip: 'Comentários',
+              icon: Badge(
+                isLabelVisible: c.comentarios > 0,
+                label: Text('${c.comentarios}'),
+                backgroundColor: AppColors.primary,
+                child: const Icon(Icons.mode_comment_outlined, size: 26),
+              ),
+            ),
             IconButton(onPressed: () {}, icon: const Icon(Icons.share_outlined, size: 26)), // visual apenas
             const Spacer(),
             ElevatedButton.icon(
@@ -330,6 +347,16 @@ class _CardCampanha extends StatelessWidget {
                 ],
               ),
             ),
+            if (c.comentarios > 0) ...[
+              const SizedBox(height: 6),
+              InkWell(
+                onTap: onComentar,
+                child: Text(
+                  c.comentarios == 1 ? 'Ver 1 comentário' : 'Ver os ${c.comentarios} comentários',
+                  style: const TextStyle(color: AppColors.textGrey, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Text(formatarDataHora(c.criadoEm), style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
           ]),

@@ -109,3 +109,10 @@ class AtualizarCampanhaSchema(Schema):
 class AtualizarInscricaoSchema(Schema):
     status = fields.Str(required=True, validate=validate.OneOf(STATUS_INSCRICAO))
     horas = fields.Int(load_default=None, allow_none=True, validate=validate.Range(min=0, max=10000))
+
+
+class ComentarioSchema(Schema):
+    texto = fields.Str(
+        required=True,
+        validate=validate.Length(min=1, max=500, error="O comentário deve ter entre 1 e 500 caracteres."),
+    )

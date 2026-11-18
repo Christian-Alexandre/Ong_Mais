@@ -116,6 +116,17 @@ class ApiService {
     return (r['curtiu'] == true, (r['curtidas'] as num).toInt());
   }
 
+  // ---------- Comentários ----------
+  Future<List<Comentario>> comentarios(int campanhaId) async {
+    final r = await _api.get('/campanhas/$campanhaId/comentarios');
+    return (r as List).map((e) => Comentario.fromJson(e)).toList();
+  }
+
+  Future<Comentario> comentar(int campanhaId, String texto) async =>
+      Comentario.fromJson(await _api.post('/campanhas/$campanhaId/comentarios', {'texto': texto.trim()}));
+
+  Future<void> apagarComentario(int id) => _api.delete('/campanhas/comentarios/$id');
+
   Future<Inscricao> inscrever(int campanhaId) async =>
       Inscricao.fromJson(await _api.post('/campanhas/$campanhaId/inscricoes'));
 

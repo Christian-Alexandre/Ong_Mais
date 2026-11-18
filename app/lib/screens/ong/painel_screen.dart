@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../widgets/comentarios_sheet.dart';
 import '../../widgets/common.dart';
 import 'editar_perfil_ong_screen.dart';
 import 'gerenciar_inscritos_screen.dart';
@@ -149,6 +150,10 @@ class PainelScreenState extends State<PainelScreen> {
                         onEditar: () => _editar(c),
                         onExcluir: () => _excluir(c),
                         onGerenciar: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GerenciarInscritosScreen(campanha: c))).then((_) => recarregar()),
+                        onComentarios: () async {
+                          final total = await abrirComentarios(context, c);
+                          if (total != null && mounted) setState(() => c.comentarios = total);
+                        },
                       ),
                       const SizedBox(height: 14),
                     ],
@@ -200,7 +205,8 @@ class _CardCampanhaOng extends StatelessWidget {
   final VoidCallback onEditar;
   final VoidCallback onExcluir;
   final VoidCallback onGerenciar;
-  const _CardCampanhaOng({required this.campanha, required this.onEditar, required this.onExcluir, required this.onGerenciar});
+  final VoidCallback onComentarios;
+  const _CardCampanhaOng({required this.campanha, required this.onEditar, required this.onExcluir, required this.onGerenciar, required this.onComentarios});
 
   @override
   Widget build(BuildContext context) {
@@ -248,6 +254,20 @@ class _CardCampanhaOng extends StatelessWidget {
           ]),
         ),
         const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 0), child: Divider(height: 1)),
+        InkWell(
+          onTap: onComentarios,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(children: [
+              const Icon(Icons.mode_comment_outlined, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text('Comentários${c.comentarios > 0 ? ' (${c.comentarios})' : ''}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 15)),
+              const Spacer(),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
+            ]),
+          ),
+        ),
+        const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Divider(height: 1)),
         if (c.tipo == TipoCampanha.voluntariado)
           InkWell(
             onTap: onGerenciar,
