@@ -8,9 +8,11 @@ import '../../main.dart';
 import '../../models/models.dart';
 import '../../widgets/comentarios_sheet.dart';
 import '../../widgets/common.dart';
+import '../../widgets/compartilhar.dart';
 import 'editar_perfil_ong_screen.dart';
 import 'gerenciar_inscritos_screen.dart';
 import 'nova_campanha_sheet.dart';
+import 'perfil_publico_screen.dart';
 
 /// Meu Painel (ONG): card da ONG + lista de campanhas + FAB Nova Campanha.
 class PainelScreen extends StatefulWidget {
@@ -63,6 +65,11 @@ class PainelScreenState extends State<PainelScreen> {
     }
   }
 
+  void _verPerfilPublico() {
+    if (_ong == null) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PerfilPublicoScreen(ongId: _ong!.id, modoDono: true)));
+  }
+
   Future<void> _nova() async {
     final criada = await mostrarNovaCampanha(context);
     if (criada == true) {
@@ -112,6 +119,7 @@ class PainelScreenState extends State<PainelScreen> {
       appBar: AppBar(
         title: const Text('Painel da ONG'),
         actions: [
+          IconButton(onPressed: _verPerfilPublico, icon: const Icon(Icons.visibility_outlined, color: AppColors.primary), tooltip: 'Ver como os voluntários me veem'),
           IconButton(onPressed: _editarPerfil, icon: const Icon(Icons.edit_outlined, color: AppColors.primary), tooltip: 'Editar perfil'),
           IconButton(onPressed: _carregando ? null : recarregar, icon: const Icon(Icons.refresh_rounded, color: AppColors.primary), tooltip: 'Atualizar'),
           IconButton(onPressed: () => sairDaConta(context), icon: const Icon(Icons.logout_rounded, color: AppColors.danger), tooltip: 'Sair'),
@@ -172,32 +180,84 @@ class PainelScreenState extends State<PainelScreen> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          LogoBase64(base64: ong.logoBase64, tamanho: 76),
-          const SizedBox(width: 16),
+          LogoBase64(base64: ong.logoBase64, tamanho: 72),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(ong.nomeFantasia, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(ong.nomeFantasia, style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.bold, height: 1.2)),
               const SizedBox(height: 4),
-              Text(ong.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              Text(ong.email ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 13.5)),
+              const SizedBox(height: 8),
+              _pilula('${emojiCategoria(ong.categoria)} ${ong.categoria}'),
             ]),
           ),
-          IconButton(onPressed: _editarPerfil, icon: const Icon(Icons.edit, color: Colors.white)),
+          IconButton(onPressed: _editarPerfil, icon: const Icon(Icons.edit, color: Colors.white), tooltip: 'Editar perfil'),
         ]),
-        const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(color: Colors.white30, height: 1)),
+        const SizedBox(height: 10),
+        InkWell(
+          onTap: _verPerfilPublico,
+          borderRadius: BorderRadius.circular(20),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.visibility_outlined, color: Colors.white, size: 18),
+              SizedBox(width: 6),
+              Text('Ver como os voluntários me veem', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, decoration: TextDecoration.underline, decorationColor: Colors.white)),
+            ]),
+          ),
+        ),
+        if (ong.areasAtuacao.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(spacing: 6, runSpacing: 6, children: [for (final a in ong.areasAtuacao) _pilula(a, leve: true)]),
+        ],
+        const SizedBox(height: 16),
+        // CNPJ em linha própria (não espreme mais os outros dados)
+        _linhaInfo(Icons.badge_outlined, 'CNPJ', ong.cnpj),
+        const SizedBox(height: 10),
         Row(children: [
-          Expanded(flex: 4, child: _info('CNPJ', ong.cnpj)),
-          Expanded(flex: 2, child: _info('Campanhas', '$ativas ativa${ativas == 1 ? '' : 's'}')),
-          Expanded(flex: 3, child: _info('WhatsApp', formatarTelefone(ong.whatsapp))),
+          Expanded(child: _blocoInfo(Icons.campaign_outlined, 'Campanhas ativas', '$ativas')),
+          const SizedBox(width: 10),
+          Expanded(child: _blocoInfo(Icons.chat_outlined, 'WhatsApp', formatarTelefone(ong.whatsapp))),
         ]),
       ]),
     );
   }
 
-  Widget _info(String rotulo, String valor) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(rotulo, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-        const SizedBox(height: 2),
-        FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(valor, maxLines: 1, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
-      ]);
+  Widget _pilula(String texto, {bool leve = false}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: leve ? 0.14 : 0.22), borderRadius: BorderRadius.circular(20)),
+        child: Text(texto, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12.5)),
+      );
+
+  Widget _linhaInfo(IconData icone, String rotulo, String valor) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+        child: Row(children: [
+          Icon(icone, color: Colors.white70, size: 20),
+          const SizedBox(width: 10),
+          Text(rotulo, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const Spacer(),
+          Text(valor, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.3)),
+        ]),
+      );
+
+  Widget _blocoInfo(IconData icone, String rotulo, String valor) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icone, color: Colors.white70, size: 18),
+            const SizedBox(width: 6),
+            Flexible(child: Text(rotulo, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 12.5))),
+          ]),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(valor, maxLines: 1, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+        ]),
+      );
 }
 
 class _CardCampanhaOng extends StatelessWidget {
@@ -217,40 +277,53 @@ class _CardCampanhaOng extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (c.fotoBase64 != null && c.fotoBase64!.isNotEmpty) FotoBase64(base64: c.fotoBase64, altura: 180),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
+          padding: const EdgeInsets.fromLTRB(16, 14, 4, 0),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
-              width: 52,
-              height: 52,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(color: cor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
               child: Icon(TipoCampanha.icone(c.tipo), color: cor),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(c.titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: AppColors.textDark)),
-                const SizedBox(height: 4),
-                if (c.descricao != null) Text(c.descricao!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textGrey)),
-                const SizedBox(height: 6),
-                Row(children: [
+                Wrap(spacing: 6, runSpacing: 4, children: [
                   Etiqueta(texto: TipoCampanha.rotulo(c.tipo), cor: cor),
-                  const SizedBox(width: 8),
                   if (!c.ativa) const Etiqueta(texto: 'Inativa', cor: AppColors.textGrey),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '${c.curtidas} ❤  •  ${formatarData(c.criadoEm)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: const TextStyle(color: AppColors.textGrey, fontSize: 12),
-                    ),
-                  ),
                 ]),
+                const SizedBox(height: 6),
+                Text(c.titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: AppColors.textDark, height: 1.25)),
               ]),
             ),
-            IconButton(onPressed: onEditar, icon: const Icon(Icons.edit_outlined, color: AppColors.primary)),
-            IconButton(onPressed: onExcluir, icon: const Icon(Icons.delete_outline, color: AppColors.danger)),
+            PopupMenuButton<String>(
+              tooltip: 'Opções',
+              icon: const Icon(Icons.more_vert_rounded, color: AppColors.textGrey),
+              onSelected: (op) {
+                if (op == 'editar') onEditar();
+                if (op == 'compartilhar') compartilharCampanha(context, c);
+                if (op == 'excluir') onExcluir();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'editar', child: ListTile(leading: Icon(Icons.edit_outlined, color: AppColors.primary), title: Text('Editar'), contentPadding: EdgeInsets.zero)),
+                PopupMenuItem(value: 'compartilhar', child: ListTile(leading: Icon(Icons.share_outlined, color: AppColors.primary), title: Text('Compartilhar'), contentPadding: EdgeInsets.zero)),
+                PopupMenuItem(value: 'excluir', child: ListTile(leading: Icon(Icons.delete_outline, color: AppColors.danger), title: Text('Excluir', style: TextStyle(color: AppColors.danger)), contentPadding: EdgeInsets.zero)),
+              ],
+            ),
+          ]),
+        ),
+        if (c.descricao != null && c.descricao!.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Text(c.descricao!, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF495057), height: 1.4)),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Wrap(spacing: 14, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            _numero(Icons.favorite_rounded, '${c.curtidas}', AppColors.danger),
+            _numero(Icons.mode_comment_outlined, '${c.comentarios}', AppColors.primary),
+            if (c.tipo == TipoCampanha.voluntariado) _numero(Icons.people_alt_outlined, '${c.inscritos}', AppColors.primary),
+            _numero(Icons.calendar_today_outlined, formatarData(c.criadoEm), AppColors.textGrey),
           ]),
         ),
         const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 0), child: Divider(height: 1)),
@@ -290,4 +363,10 @@ class _CardCampanhaOng extends StatelessWidget {
       ]),
     );
   }
+
+  Widget _numero(IconData icone, String texto, Color cor) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icone, size: 16, color: cor),
+        const SizedBox(width: 4),
+        Text(texto, style: const TextStyle(color: AppColors.textGrey, fontSize: 13, fontWeight: FontWeight.w600)),
+      ]);
 }

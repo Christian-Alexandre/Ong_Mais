@@ -11,7 +11,7 @@ PAPEL_ONG = "ONG"
 PAPEL_VOLUNTARIO = "VOLUNTARIO"
 
 TIPOS_CAMPANHA = ("VOLUNTARIADO", "DOACAO", "FINANCEIRO")
-CATEGORIAS_ONG = ("Animais", "Educação", "Alimentação", "Saúde", "Meio Ambiente", "Outros")
+from .catalogo import CATEGORIAS as CATEGORIAS_ONG  # noqa: E402  (Animais, Educação, ...)
 
 STATUS_PENDENTE = "PENDENTE"
 STATUS_APROVADO = "APROVADO"
@@ -66,6 +66,8 @@ class Ong(db.Model):
     longitude: Mapped[float | None] = mapped_column(Float)
     descricao: Mapped[str | None] = mapped_column(Text)
     logo_base64: Mapped[str | None] = mapped_column(BigText)
+    # Áreas de atuação dentro da categoria (ex.: Animais -> Adoção, Resgate de animais)
+    areas_atuacao: Mapped[list | None] = mapped_column(JSON, default=list)
 
     usuario: Mapped[Usuario] = relationship(back_populates="ong")
     campanhas: Mapped[list["Campanha"]] = relationship(back_populates="ong", cascade="all, delete-orphan")
@@ -77,6 +79,7 @@ class Ong(db.Model):
             "nome_fantasia": self.nome_fantasia,
             "cnpj": self.cnpj,
             "categoria": self.categoria,
+            "areas_atuacao": self.areas_atuacao or [],
             "whatsapp": self.whatsapp,
             "endereco": self.endereco,
             "latitude": self.latitude,
@@ -94,19 +97,23 @@ class Voluntario(db.Model):
     nome_completo: Mapped[str] = mapped_column(String(150), nullable=False)
     interesses: Mapped[list | None] = mapped_column(JSON, default=list)
     horas_trabalhadas: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    foto_base64: Mapped[str | None] = mapped_column(BigText)  # foto de perfil (opcional)
 
     usuario: Mapped[Usuario] = relationship(back_populates="voluntario")
     inscricoes: Mapped[list["Inscricao"]] = relationship(back_populates="voluntario", cascade="all, delete-orphan")
 
-    def to_dict(self) -> dict:
+    def to_dict(self, publico: bool = False) -> dict:
+        """publico=True: visto por outro voluntário (sem e-mail)."""
         acoes_apoiadas = sum(1 for i in self.inscricoes if i.status in (STATUS_APROVADO, STATUS_CONCLUIDO))
         return {
             "id": self.id,
-            "email": self.usuario.email if self.usuario else None,
+            "email": None if publico else (self.usuario.email if self.usuario else None),
             "nome_completo": self.nome_completo,
             "interesses": self.interesses or [],
+            "foto_base64": self.foto_base64,
             "horas_trabalhadas": self.horas_trabalhadas,
             "acoes_apoiadas": acoes_apoiadas,
+            "membro_desde": iso_utc(self.usuario.criado_em) if self.usuario else None,
         }
 
 
@@ -144,6 +151,8 @@ class Campanha(db.Model):
             "ong_nome": self.ong.nome_fantasia if self.ong else None,
             "ong_logo_base64": self.ong.logo_base64 if self.ong else None,
             "ong_whatsapp": self.ong.whatsapp if self.ong else None,
+            "ong_categoria": self.ong.categoria if self.ong else None,
+            "ong_areas_atuacao": (self.ong.areas_atuacao or []) if self.ong else [],
             "tipo": self.tipo,
             "titulo": self.titulo,
             "descricao": self.descricao,
@@ -195,6 +204,7 @@ class Inscricao(db.Model):
             d["voluntario_nome"] = self.voluntario.nome_completo
             d["voluntario_email"] = self.voluntario.usuario.email if self.voluntario.usuario else None
             d["voluntario_interesses"] = self.voluntario.interesses or []
+            d["voluntario_foto_base64"] = self.voluntario.foto_base64
         return d
 
 
@@ -244,6 +254,7 @@ class Comentario(db.Model):
             "autor_nome": self.autor_nome(),
             "autor_papel": u.papel if u else None,
             "autor_logo_base64": u.ong.logo_base64 if u and u.papel == PAPEL_ONG and u.ong else None,
+            "autor_foto_base64": u.voluntario.foto_base64 if u and u.papel != PAPEL_ONG and u.voluntario else None,
             "texto": self.texto,
             "criado_em": iso_utc(self.criado_em),
             # pode apagar: o autor ou a ONG dona da campanha (moderação)

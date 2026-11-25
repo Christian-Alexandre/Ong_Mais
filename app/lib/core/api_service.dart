@@ -25,12 +25,16 @@ class ApiService {
     required String email,
     required String senha,
     required String confirmar,
+    List<String> interesses = const [],
+    String? fotoBase64,
   }) async {
     final r = await _api.post('/auth/registro/voluntario', {
       'nome_completo': nome.trim(),
       'email': email.trim(),
       'senha': senha,
       'confirmar_senha': confirmar,
+      'interesses': interesses,
+      'foto_base64': fotoBase64,
     });
     await _guardarSessao(Map<String, dynamic>.from(r));
   }
@@ -43,6 +47,13 @@ class ApiService {
   // ---------- Voluntário ----------
   Future<Voluntario> meuPerfilVoluntario() async {
     final r = await _api.get('/voluntarios/me');
+    await Session.instance.atualizarPerfil(Map<String, dynamic>.from(r));
+    return Voluntario.fromJson(r);
+  }
+
+  /// Troca (ou remove, com null) a foto de perfil do voluntário.
+  Future<Voluntario> atualizarFotoVoluntario(String? fotoBase64) async {
+    final r = await _api.put('/voluntarios/me', {'foto_base64': fotoBase64});
     await Session.instance.atualizarPerfil(Map<String, dynamic>.from(r));
     return Voluntario.fromJson(r);
   }
@@ -80,6 +91,18 @@ class ApiService {
   }
 
   Future<Ong> perfilPublicoOng(int id) async => Ong.fromJson(await _api.get('/ongs/$id'));
+
+  /// Números da aba Impacto (só a ONG logada).
+  Future<Map<String, dynamic>> impactoOng() async => Map<String, dynamic>.from(await _api.get('/ongs/me/impacto'));
+
+  /// Perfil de um voluntário. A ONG vê também e-mail e participação nas campanhas dela.
+  Future<Voluntario> perfilDoVoluntario(int id) async => Voluntario.fromJson(await _api.get('/voluntarios/$id'));
+
+  /// Endereço legível a partir do GPS (funciona antes do login, no cadastro).
+  Future<String> enderecoDaLocalizacao(double lat, double lng) async {
+    final r = await _api.get('/geo/endereco', query: {'lat': '$lat', 'lng': '$lng'});
+    return r['endereco'] as String;
+  }
 
   // ---------- Campanhas ----------
   Future<List<Campanha>> feed({String? tipo, String? q}) async {

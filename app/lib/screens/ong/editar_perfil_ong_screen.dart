@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../core/api_service.dart';
+import '../../core/catalogo.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/interesses.dart';
+import '../../widgets/localizacao.dart';
 
 class EditarPerfilOngScreen extends StatefulWidget {
   final Ong ong;
@@ -18,10 +20,11 @@ class EditarPerfilOngScreen extends StatefulWidget {
 class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
   final _form = GlobalKey<FormState>();
   late final _nome = TextEditingController(text: widget.ong.nomeFantasia);
-  late final _whats = TextEditingController(text: widget.ong.whatsapp);
+  late final _whats = TextEditingController(text: formatarTelefone(widget.ong.whatsapp));
   late final _endereco = TextEditingController(text: widget.ong.endereco ?? '');
   late final _descricao = TextEditingController(text: widget.ong.descricao ?? '');
   late String _categoria = categoriasOng.contains(widget.ong.categoria) ? widget.ong.categoria : 'Outros';
+  late List<String> _areas = [...widget.ong.areasAtuacao];
   late String? _logo = widget.ong.logoBase64;
   late double? _lat = widget.ong.latitude;
   late double? _lng = widget.ong.longitude;
@@ -38,22 +41,16 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
 
   Future<void> _capturar() async {
     setState(() => _capturando = true);
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) throw 'Ative o GPS do aparelho.';
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) throw 'Permissão de localização negada.';
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
-      setState(() {
-        _lat = pos.latitude;
-        _lng = pos.longitude;
-      });
-      if (mounted) mostrarSnack(context, 'Localização capturada!');
-    } catch (e) {
-      if (mounted) mostrarSnack(context, 'Não foi possível capturar a localização: $e', erro: true);
-    } finally {
-      if (mounted) setState(() => _capturando = false);
-    }
+    final loc = await capturarLocalizacaoComEndereco(context);
+    if (!mounted) return;
+    setState(() {
+      _capturando = false;
+      if (loc == null) return;
+      _lat = loc.lat;
+      _lng = loc.lng;
+      if (loc.endereco != null) _endereco.text = loc.endereco!;
+    });
+    if (loc != null) mostrarSnack(context, loc.endereco != null ? 'Endereço atualizado pela sua localização. Confira o número.' : 'Localização capturada!');
   }
 
   Future<void> _salvar() async {
@@ -63,6 +60,7 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
       await ApiService.instance.atualizarOng({
         'nome_fantasia': _nome.text.trim(),
         'categoria': _categoria,
+        'areas_atuacao': _areas,
         'whatsapp': _whats.text.trim(),
         'endereco': _endereco.text.trim().isEmpty ? null : _endereco.text.trim(),
         'latitude': _lat,
@@ -140,16 +138,25 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
                 initialValue: _categoria,
                 decoration: const InputDecoration(prefixIcon: Icon(Icons.category_outlined)),
                 items: categoriasOng.map((c) => DropdownMenuItem(value: c, child: Text('${emojiCategoria(c)}  $c'))).toList(),
-                onChanged: (v) => setState(() => _categoria = v ?? _categoria),
+                onChanged: (v) => setState(() {
+                  _categoria = v ?? _categoria;
+                  _areas = _areas.where((a) => (areasPorCategoria[_categoria] ?? const []).contains(a)).toList();
+                }),
               ),
+            ),
+            CampoRotulado(
+              rotulo: 'Áreas de atuação',
+              campo: SeletorAreas(categoria: _categoria, selecionadas: _areas, onChanged: (l) => setState(() => _areas = l)),
             ),
             CampoRotulado(
               rotulo: 'WhatsApp',
               campo: TextFormField(
                 controller: _whats,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(prefixIcon: Icon(Icons.phone_outlined)),
-                validator: (v) => somenteDigitos(v ?? '').length < 10 ? 'Informe DDD + número' : null,
+                inputFormatters: [TelefoneFormatter()],
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                decoration: const InputDecoration(hintText: '(11) 98765-4321', prefixIcon: Icon(Icons.phone_outlined)),
+                validator: telefoneErro,
               ),
             ),
             CampoRotulado(
@@ -159,7 +166,7 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
             OutlinedButton.icon(
               onPressed: _capturando ? null : _capturar,
               icon: _capturando ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.my_location_rounded),
-              label: Text(_lat == null ? 'Capturar minha localização atual' : 'Atualizar localização (${_lat!.toStringAsFixed(4)}, ${_lng!.toStringAsFixed(4)})'),
+              label: Text(_lat == null ? 'Usar minha localização atual' : 'Atualizar endereço pela localização atual'),
             ),
             const SizedBox(height: 16),
             CampoRotulado(

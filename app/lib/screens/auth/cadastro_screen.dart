@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../core/api_service.dart';
+import '../../core/catalogo.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../main.dart';
 import '../../widgets/common.dart';
+import '../../widgets/interesses.dart';
+import '../../widgets/localizacao.dart';
 
 /// Cadastro com alternância Voluntário / Sou ONG (como no protótipo).
 class CadastroScreen extends StatefulWidget {
@@ -95,6 +97,8 @@ class _FormVoluntarioState extends State<_FormVoluntario> {
   final _senha = TextEditingController();
   final _confirma = TextEditingController();
   bool _carregando = false;
+  String? _foto;
+  List<String> _interesses = [];
 
   @override
   void dispose() {
@@ -108,7 +112,14 @@ class _FormVoluntarioState extends State<_FormVoluntario> {
     if (!_form.currentState!.validate()) return;
     setState(() => _carregando = true);
     try {
-      await ApiService.instance.registrarVoluntario(nome: _nome.text, email: _email.text, senha: _senha.text, confirmar: _confirma.text);
+      await ApiService.instance.registrarVoluntario(
+        nome: _nome.text,
+        email: _email.text,
+        senha: _senha.text,
+        confirmar: _confirma.text,
+        interesses: _interesses,
+        fotoBase64: _foto,
+      );
       if (!mounted) return;
       irParaHome(context, mensagem: 'Bem-vindo(a), ${_nome.text.trim()}! Cadastro realizado.');
     } catch (e) {
@@ -125,6 +136,15 @@ class _FormVoluntarioState extends State<_FormVoluntario> {
       child: Form(
         key: _form,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Center(
+            child: ValueListenableBuilder(
+              valueListenable: _nome,
+              builder: (context, valor, child) => SeletorFotoPerfil(fotoBase64: _foto, nome: valor.text, raio: 52, onAlterada: (b64) => setState(() => _foto = b64)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Center(child: Text('Adicionar Foto (Opcional)', style: TextStyle(color: AppColors.textGrey))),
+          const SizedBox(height: 20),
           CampoRotulado(
             rotulo: 'Nome Completo',
             campo: TextFormField(
@@ -151,6 +171,25 @@ class _FormVoluntarioState extends State<_FormVoluntario> {
               hint: 'Repita a senha',
               icone: Icons.lock_clock_outlined,
               validator: (v) => v != _senha.text ? 'As senhas não conferem' : null,
+            ),
+          ),
+          CampoRotulado(
+            rotulo: 'Seus interesses (opcional)',
+            campo: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFD9DEE3))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                ChipsInteresses(itens: _interesses, vazio: 'Escolha as causas que você apoia. Mostramos o que você tem em comum com cada ONG.'),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final nova = await escolherInteresses(context, _interesses);
+                    if (nova != null) setState(() => _interesses = nova);
+                  },
+                  icon: Icon(_interesses.isEmpty ? Icons.add_rounded : Icons.edit_outlined),
+                  label: Text(_interesses.isEmpty ? 'Escolher interesses' : 'Editar interesses (${_interesses.length})'),
+                ),
+              ]),
             ),
           ),
           ElevatedButton(
@@ -183,6 +222,7 @@ class _FormOngState extends State<_FormOng> {
   final _senha = TextEditingController();
   final _confirma = TextEditingController();
   String _categoria = categoriasOng.first;
+  List<String> _areas = [];
   String? _logoBase64;
   double? _lat;
   double? _lng;
@@ -199,26 +239,16 @@ class _FormOngState extends State<_FormOng> {
 
   Future<void> _capturarLocalizacao() async {
     setState(() => _capturando = true);
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw 'Ative o GPS do aparelho.';
-      }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-        throw 'Permissão de localização negada.';
-      }
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
-      setState(() {
-        _lat = pos.latitude;
-        _lng = pos.longitude;
-      });
-      if (mounted) mostrarSnack(context, 'Localização capturada: ${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}');
-    } catch (e) {
-      if (mounted) mostrarSnack(context, 'Não foi possível capturar a localização: $e', erro: true);
-    } finally {
-      if (mounted) setState(() => _capturando = false);
-    }
+    final loc = await capturarLocalizacaoComEndereco(context);
+    if (!mounted) return;
+    setState(() {
+      _capturando = false;
+      if (loc == null) return;
+      _lat = loc.lat;
+      _lng = loc.lng;
+      if (loc.endereco != null) _endereco.text = loc.endereco!;
+    });
+    if (loc?.endereco != null) mostrarSnack(context, 'Endereço preenchido pela sua localização. Confira o número.');
   }
 
   Future<void> _cadastrar() async {
@@ -229,6 +259,7 @@ class _FormOngState extends State<_FormOng> {
         'nome_fantasia': _nome.text.trim(),
         'cnpj': _cnpj.text.trim(),
         'categoria': _categoria,
+        'areas_atuacao': _areas,
         'whatsapp': _whats.text.trim(),
         'endereco': _endereco.text.trim().isEmpty ? null : _endereco.text.trim(),
         'latitude': _lat,
@@ -316,16 +347,29 @@ class _FormOngState extends State<_FormOng> {
               initialValue: _categoria,
               decoration: const InputDecoration(prefixIcon: Icon(Icons.category_outlined)),
               items: categoriasOng.map((c) => DropdownMenuItem(value: c, child: Text('${emojiCategoria(c)}  $c'))).toList(),
-              onChanged: (v) => setState(() => _categoria = v ?? _categoria),
+              onChanged: (v) => setState(() {
+                _categoria = v ?? _categoria;
+                _areas = _areas.where((a) => (areasPorCategoria[_categoria] ?? const []).contains(a)).toList();
+              }),
             ),
+          ),
+          CampoRotulado(
+            rotulo: 'Áreas de atuação (opcional)',
+            campo: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SeletorAreas(categoria: _categoria, selecionadas: _areas, onChanged: (l) => setState(() => _areas = l)),
+              const SizedBox(height: 4),
+              const Text('Os voluntários com os mesmos interesses verão os pontos em comum com a sua ONG.', style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+            ]),
           ),
           CampoRotulado(
             rotulo: 'WhatsApp / Telefone de Contato',
             campo: TextFormField(
               controller: _whats,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(hintText: 'Ex: (11) 98765-4321', prefixIcon: Icon(Icons.phone_outlined)),
-              validator: (v) => somenteDigitos(v ?? '').length < 10 ? 'Informe DDD + número' : null,
+              inputFormatters: [TelefoneFormatter()],
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: const InputDecoration(hintText: '(11) 98765-4321', prefixIcon: Icon(Icons.phone_outlined)),
+              validator: telefoneErro,
             ),
           ),
           CampoRotulado(
@@ -340,11 +384,11 @@ class _FormOngState extends State<_FormOng> {
             icon: _capturando
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : Icon(_lat == null ? Icons.my_location_rounded : Icons.check_circle_rounded),
-            label: Text(_lat == null ? 'Capturar minha localização atual' : 'Localização capturada ✓'),
+            label: Text(_lat == null ? 'Usar minha localização atual' : 'Localização capturada ✓ (toque para refazer)'),
           ),
           const SizedBox(height: 6),
           const Text(
-            'Opcional. Sem a captura, tentaremos localizar pelo endereço; sem coordenadas a ONG não aparece no mapa.',
+            'Preenche o endereço automaticamente pelo GPS. Se preferir digitar, localizamos pelo endereço; sem coordenadas a ONG não aparece no mapa.',
             style: TextStyle(fontSize: 12, color: AppColors.textGrey),
           ),
           const SizedBox(height: 16),

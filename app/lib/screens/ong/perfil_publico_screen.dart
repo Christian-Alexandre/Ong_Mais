@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_service.dart';
+import '../../core/catalogo.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/compartilhar.dart';
+import '../../widgets/interesses.dart';
 
-/// Perfil Público da ONG. Usado pelo voluntário (via mapa/feed) e pela própria ONG (aba Perfil Público).
+/// Perfil Público da ONG. Usado pelo voluntário (via mapa/feed) e pela própria ONG (botão "Ver como os voluntários me veem" no painel).
 class PerfilPublicoScreen extends StatefulWidget {
   final int ongId;
   final bool modoDono;
-  const PerfilPublicoScreen({super.key, required this.ongId, this.modoDono = false});
+  /// true quando a tela é uma aba (sem botão voltar)
+  final bool embutido;
+  const PerfilPublicoScreen({super.key, required this.ongId, this.modoDono = false, this.embutido = false});
 
   @override
   State<PerfilPublicoScreen> createState() => _PerfilPublicoScreenState();
@@ -37,6 +42,8 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
     }
   }
 
+  List<String> get _meusInteresses => (Session.instance.perfil?['interesses'] as List? ?? []).map((e) => e.toString()).toList();
+
   Future<void> _queroAjudar() async {
     final o = _ong!;
     final ok = await abrirWhatsApp(o.whatsapp, 'Olá, ${o.nomeFantasia}! Encontrei a ONG no ONG Mais e gostaria de ajudar. Como posso contribuir?');
@@ -46,7 +53,7 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
   @override
   Widget build(BuildContext context) {
     final o = _ong;
-    final embutido = widget.modoDono; // dentro da shell da ONG, sem botão voltar
+    final embutido = widget.embutido;
     return Scaffold(
       body: o == null
           ? SafeArea(
@@ -109,6 +116,16 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
                           padding: EdgeInsets.only(top: 8),
                           child: Text('⚠ Sua ONG não tem localização cadastrada e não aparece no mapa. Edite o perfil e capture a localização.', style: TextStyle(color: AppColors.orange, fontSize: 13)),
                         ),
+                      if (Session.instance.isVoluntario) ...[
+                        const SizedBox(height: 16),
+                        FaixaEmComum(emComum: emComum(o.tags, _meusInteresses), com: 'com você'),
+                      ],
+                      if (o.areasAtuacao.isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        const Text('Áreas de Atuação', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                        const SizedBox(height: 10),
+                        ChipsInteresses(itens: o.areasAtuacao, emComum: Session.instance.isVoluntario ? emComum(o.areasAtuacao, _meusInteresses) : const []),
+                      ],
                       const SizedBox(height: 22),
                       const Text('Sobre a ONG', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                       const SizedBox(height: 8),
@@ -137,7 +154,10 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
                                   Text('${tempoRelativo(c.criadoEm)} • ${formatarData(c.criadoEm)}', style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
                                 ]),
                                 const SizedBox(height: 10),
-                                Text(c.titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textDark)),
+                                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Expanded(child: Text(c.titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textDark))),
+                                  BotaoCompartilhar(campanha: c, nomeOng: o.nomeFantasia, compacto: true),
+                                ]),
                                 if (c.descricao != null) ...[
                                   const SizedBox(height: 4),
                                   Text(c.descricao!, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textGrey)),

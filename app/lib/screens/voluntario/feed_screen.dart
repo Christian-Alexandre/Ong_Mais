@@ -3,11 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/api_service.dart';
+import '../../core/catalogo.dart';
+import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
 import '../../widgets/comentarios_sheet.dart';
 import '../../widgets/common.dart';
+import '../../widgets/compartilhar.dart';
+import '../../widgets/interesses.dart';
 import '../ong/perfil_publico_screen.dart';
 import 'minhas_inscricoes_tab.dart';
 
@@ -261,6 +265,8 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   }
 }
 
+List<String> get _meusInteresses => (Session.instance.perfil?['interesses'] as List? ?? []).map((e) => e.toString()).toList();
+
 class _CardCampanha extends StatelessWidget {
   final Campanha campanha;
   final VoidCallback onCurtir;
@@ -291,6 +297,8 @@ class _CardCampanha extends StatelessWidget {
                   Text('${TipoCampanha.rotulo(c.tipo)} • ${tempoRelativo(c.criadoEm)}', style: const TextStyle(color: AppColors.textGrey, fontSize: 13)),
                 ]),
               ),
+              SeloEmComum(quantidade: emComum(c.ongTags, _meusInteresses).length),
+              const SizedBox(width: 8),
               Icon(TipoCampanha.icone(c.tipo), color: TipoCampanha.cor(c.tipo)),
             ]),
           ),
@@ -315,7 +323,7 @@ class _CardCampanha extends StatelessWidget {
                 child: const Icon(Icons.mode_comment_outlined, size: 26),
               ),
             ),
-            IconButton(onPressed: () {}, icon: const Icon(Icons.share_outlined, size: 26)), // visual apenas
+            BotaoCompartilhar(campanha: c),
             const Spacer(),
             ElevatedButton.icon(
               onPressed: onAjudar,

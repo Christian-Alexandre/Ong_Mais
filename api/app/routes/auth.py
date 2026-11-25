@@ -3,7 +3,8 @@ from flask_jwt_extended import create_access_token, jwt_required
 
 from ..extensions import bcrypt, db
 from ..models import PAPEL_ONG, PAPEL_VOLUNTARIO, Ong, Usuario, Voluntario
-from ..schemas import CadastroOngSchema, CadastroVoluntarioSchema, LoginSchema, formatar_cnpj, somente_digitos
+from ..catalogo import areas_validas, normalizar_telefone
+from ..schemas import CadastroOngSchema, CadastroVoluntarioSchema, LoginSchema, formatar_cnpj
 from ..services.geocoding import geocodificar
 from ..utils import erro, usuario_id_atual, validar
 
@@ -27,6 +28,15 @@ def login():
     return _resposta_login(usuario)
 
 
+def _limpar_interesses(lista) -> list[str]:
+    vistos: list[str] = []
+    for i in lista or []:
+        i = (i or "").strip()
+        if i and i not in vistos:
+            vistos.append(i)
+    return vistos
+
+
 @bp.post("/registro/voluntario")
 def registro_voluntario():
     dados, err = validar(CadastroVoluntarioSchema(), request.get_json(silent=True))
@@ -41,7 +51,12 @@ def registro_voluntario():
         senha_hash=bcrypt.generate_password_hash(dados["senha"]).decode("utf-8"),
         papel=PAPEL_VOLUNTARIO,
     )
-    usuario.voluntario = Voluntario(nome_completo=dados["nome_completo"].strip(), interesses=[], horas_trabalhadas=0)
+    usuario.voluntario = Voluntario(
+        nome_completo=dados["nome_completo"].strip(),
+        interesses=_limpar_interesses(dados.get("interesses")),
+        foto_base64=dados.get("foto_base64") or None,
+        horas_trabalhadas=0,
+    )
     db.session.add(usuario)
     db.session.commit()
     return _resposta_login(usuario), 201
@@ -73,7 +88,8 @@ def registro_ong():
         nome_fantasia=dados["nome_fantasia"].strip(),
         cnpj=cnpj,
         categoria=dados["categoria"],
-        whatsapp=somente_digitos(dados["whatsapp"]),
+        whatsapp=normalizar_telefone(dados["whatsapp"]),
+        areas_atuacao=areas_validas(dados["categoria"], dados.get("areas_atuacao"))[0],
         endereco=dados.get("endereco"),
         latitude=lat,
         longitude=lng,

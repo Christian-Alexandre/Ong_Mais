@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_service.dart';
+import '../../core/catalogo.dart';
+import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/interesses.dart';
+import 'perfil_voluntario_publico_screen.dart';
 
 /// Gerenciar Voluntários Inscritos: Aprovar / Recusar / Concluir (com horas).
 class GerenciarInscritosScreen extends StatefulWidget {
@@ -16,6 +20,11 @@ class GerenciarInscritosScreen extends StatefulWidget {
 }
 
 class _GerenciarInscritosScreenState extends State<GerenciarInscritosScreen> {
+  List<String> get _tagsDaOng {
+    final p = Session.instance.perfil;
+    return p == null ? const [] : Ong.fromJson(p).tags;
+  }
+
   List<Inscricao>? _lista;
   String? _erro;
 
@@ -128,33 +137,32 @@ class _GerenciarInscritosScreenState extends State<GerenciarInscritosScreen> {
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, idx) {
           final i = _lista![idx];
+          final comum = emComum(i.voluntarioInteresses, _tagsDaOng);
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  CircleAvatar(
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                    child: Text((i.voluntarioNome ?? '?').substring(0, 1).toUpperCase(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => PerfilVoluntarioPublicoScreen(voluntarioId: i.voluntarioId, nomeInicial: i.voluntarioNome)),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(i.voluntarioNome ?? 'Voluntário', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textDark)),
-                      if (i.voluntarioEmail != null) Text(i.voluntarioEmail!, style: const TextStyle(color: AppColors.textGrey, fontSize: 13)),
-                    ]),
-                  ),
-                  Etiqueta(texto: StatusInscricao.rotulo(i.status), cor: StatusInscricao.cor(i.status), icone: StatusInscricao.icone(i.status)),
-                ]),
+                  child: Row(children: [
+                    AvatarVoluntario(fotoBase64: i.voluntarioFotoBase64, nome: i.voluntarioNome ?? '?', raio: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(i.voluntarioNome ?? 'Voluntário', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textDark)),
+                        const Text('Ver perfil', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                      ]),
+                    ),
+                    Etiqueta(texto: StatusInscricao.rotulo(i.status), cor: StatusInscricao.cor(i.status), icone: StatusInscricao.icone(i.status)),
+                  ]),
+                ),
                 const SizedBox(height: 10),
-                if (i.voluntarioInteresses.isNotEmpty)
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: i.voluntarioInteresses.map((t) => Etiqueta(texto: t, cor: AppColors.textGrey)).toList(),
-                  )
-                else
-                  const Text('Sem áreas de interesse informadas.', style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+                if (comum.isNotEmpty) ...[SeloEmComum(quantidade: comum.length), const SizedBox(height: 8)],
+                ChipsInteresses(itens: i.voluntarioInteresses, emComum: comum, vazio: 'Sem interesses informados.'),
                 const SizedBox(height: 6),
                 Text('Inscrito em ${formatarDataHora(i.criadoEm)}${i.status == 'CONCLUIDO' ? ' • ${i.horas}h registradas' : ''}', style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
                 if (i.status == 'PENDENTE' || i.status == 'APROVADO') ...[

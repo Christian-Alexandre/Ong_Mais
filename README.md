@@ -13,6 +13,19 @@ comentários pelo próprio painel. Especificação: `ONG_MAIS_ESPECIFICACAO.md`.
 | `api/` | Backend Python 3 + Flask (JWT, Bcrypt, Marshmallow, SQLAlchemy 2.0, Flask-Migrate). MySQL em produção, SQLite em dev. | `api/README.md` |
 | `app/` | App Flutter (Android), mapa OpenStreetMap. | `app/README.md` |
 
+## Funcionalidades
+
+- **Voluntário:** feed com busca e filtros, curtir, comentar, compartilhar, **Quero Ajudar** (inscrição +
+  WhatsApp), mapa de ONGs por distância, perfil com foto, interesses e horas doadas.
+- **Pontos em comum (estilo Tinder):** interesses do voluntário × categoria e áreas de atuação da ONG,
+  destacados no feed, no perfil da ONG e no perfil do voluntário.
+- **ONG:** cadastro com CNPJ validado, telefone com DDD válido, áreas de atuação e endereço preenchido
+  pela localização; painel de campanhas; inscritos (aprovar, recusar, concluir com horas); aba
+  **Impacto** (horas doadas, funil de inscrições, atividade semanal, campanhas que mais engajam).
+- **Comentários:** a ONG responde e modera; qualquer pessoa abre o perfil de quem comentou.
+
+**Baixar o APK:** [releases/ONG_Mais.apk](releases/ONG_Mais.apk) (aponta para o túnel ngrok).
+
 Documentação do projeto: `apresentacao_mobile.docx`.
 
 ## Rodar no dia a dia (Windows)
@@ -42,6 +55,7 @@ endereço do ngrok ou digite o IP do PC (ex.: `192.168.0.10`) para usar só na r
 | `diagnostico.cmd` | Verifica API, porta e firewall |
 | `verificar_app.cmd` | flutter doctor + analyze + test |
 | `capturar_telas.cmd` | Prints do emulador em alta resolução (pasta `telas/`) |
+| `abrir_app.cmd` | Abre o app já instalado no emulador/celular conectado |
 | `publicar_github.cmd` | Commit + push (usa `mensagem_commit.txt`, se existir) |
 
 O domínio do ngrok fica em `iniciar_tunel.ps1` e `gerar_apk.ps1` (`$dominio` / `$dominioNgrok`).

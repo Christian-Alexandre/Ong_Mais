@@ -20,6 +20,7 @@ def semear(forcar: bool = False) -> bool:
             nome_fantasia="Instituto Patinhas Carentes",
             cnpj="12.345.678/0001-95",  # dígitos verificadores válidos
             categoria="Animais",
+            areas_atuacao=["Adoção", "Resgate de animais", "Cuidados veterinários"],
             whatsapp="11987654321",
             endereco="Av. Paulista, 1000 - Bela Vista, São Paulo - SP",
             latitude=-23.5653,
@@ -51,7 +52,11 @@ def semear(forcar: bool = False) -> bool:
 
     if not db.session.scalar(db.select(Usuario).filter_by(email=SEED_VOL_EMAIL)):
         vol_user = Usuario(email=SEED_VOL_EMAIL, senha_hash=senha_hash, papel=PAPEL_VOLUNTARIO)
-        vol_user.voluntario = Voluntario(nome_completo="Lucas Silva", interesses=[], horas_trabalhadas=0)
+        vol_user.voluntario = Voluntario(
+            nome_completo="Lucas Silva",
+            interesses=["Animais", "Adoção", "Lar temporário", "Educação ambiental", "Reforço escolar"],
+            horas_trabalhadas=0,
+        )
         db.session.add(vol_user)
 
     db.session.commit()

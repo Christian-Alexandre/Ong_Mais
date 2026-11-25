@@ -7,6 +7,7 @@ import '../../core/utils.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/interesses.dart';
 
 class PerfilVoluntarioScreen extends StatefulWidget {
   const PerfilVoluntarioScreen({super.key});
@@ -17,7 +18,7 @@ class PerfilVoluntarioScreen extends StatefulWidget {
 
 class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
   final _nome = TextEditingController();
-  final _interesses = TextEditingController();
+  List<String> _interesses = [];
   Voluntario? _vol;
   String? _erro;
   bool _salvando = false;
@@ -33,14 +34,13 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
   @override
   void dispose() {
     _nome.dispose();
-    _interesses.dispose();
     super.dispose();
   }
 
   void _aplicar(Voluntario v) {
     _vol = v;
     _nome.text = v.nomeCompleto;
-    _interesses.text = v.interesses.join(', ');
+    _interesses = [...v.interesses];
   }
 
   Future<void> _carregar() async {
@@ -60,8 +60,7 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
     }
     setState(() => _salvando = true);
     try {
-      final interesses = _interesses.text.split(RegExp(r'[,;\n]')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      final v = await ApiService.instance.atualizarVoluntario(nome: _nome.text, interesses: interesses);
+      final v = await ApiService.instance.atualizarVoluntario(nome: _nome.text, interesses: _interesses);
       if (!mounted) return;
       setState(() => _aplicar(v));
       FocusScope.of(context).unfocus();
@@ -71,6 +70,27 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
     } finally {
       if (mounted) setState(() => _salvando = false);
     }
+  }
+
+  Future<void> _trocarFoto(String? b64) async {
+    setState(() => _salvando = true);
+    try {
+      final v = await ApiService.instance.atualizarFotoVoluntario(b64);
+      if (!mounted) return;
+      setState(() => _aplicar(v));
+      mostrarSnack(context, b64 == null ? 'Foto removida.' : 'Foto de perfil atualizada!');
+    } catch (e) {
+      if (mounted) mostrarSnack(context, 'Erro ao salvar a foto: $e', erro: true);
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
+  }
+
+  Future<void> _editarInteresses() async {
+    final nova = await escolherInteresses(context, _interesses);
+    if (nova == null || !mounted) return;
+    setState(() => _interesses = nova);
+    await _salvar();
   }
 
   @override
@@ -95,11 +115,14 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
                     decoration: BoxDecoration(gradient: AppColors.gradient, borderRadius: BorderRadius.circular(22)),
                     child: Column(children: [
-                      const AvatarBase64(raio: 44, fallback: Icons.person_rounded),
+                      SeletorFotoPerfil(fotoBase64: v.fotoBase64, nome: v.nomeCompleto, raio: 46, fundoEscuro: true, onAlterada: _trocarFoto),
+                      const SizedBox(height: 4),
+                      Text(v.fotoBase64 == null ? 'Toque para adicionar uma foto' : 'Toque para trocar a foto', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                       const SizedBox(height: 16),
                       Text(v.nomeCompleto, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Text(v.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 15)),
+                      if (v.membroDesde != null) Text('Voluntário desde ${formatarData(v.membroDesde)}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       const SizedBox(height: 14),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -131,18 +154,7 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
                           decoration: const InputDecoration(labelText: 'Nome Completo', prefixIcon: Icon(Icons.person_outline)),
                         ),
                         const SizedBox(height: 16),
-                        TextField(
-                          controller: _interesses,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            labelText: 'Áreas de Interesse / Habilidades',
-                            hintText: 'Ex: Resgate animal, ensino, tecnologia, distribuição de alimentos...',
-                            alignLabelWithHint: true,
-                            prefixIcon: Padding(padding: EdgeInsets.only(bottom: 44), child: Icon(Icons.interests_outlined)),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text('Separe por vírgula.', style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+                        const SizedBox(height: 4),
                         const SizedBox(height: 18),
                         ElevatedButton.icon(
                           onPressed: _salvando ? null : _salvar,
@@ -151,6 +163,24 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
                               : const Icon(Icons.save_outlined),
                           label: const Text('Salvar Alterações'),
                         ),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          const Icon(Icons.favorite_rounded, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          const Expanded(child: Text('Meus Interesses', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark))),
+                          TextButton.icon(onPressed: _salvando ? null : _editarInteresses, icon: const Icon(Icons.edit_outlined, size: 18), label: const Text('Editar')),
+                        ]),
+                        const SizedBox(height: 4),
+                        const Text('As ONGs e campanhas mostram o que vocês têm em comum.', style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+                        const SizedBox(height: 14),
+                        ChipsInteresses(itens: _interesses, vazio: 'Toque em Editar e escolha as causas que você apoia.'),
                       ]),
                     ),
                   ),

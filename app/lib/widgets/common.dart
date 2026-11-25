@@ -76,7 +76,8 @@ class FotoBase64 extends StatelessWidget {
 }
 
 /// Abre Galeria ou Câmera e devolve a imagem em Base64 (redimensionada).
-Future<String?> escolherImagemBase64(BuildContext context, {ImageSource? origem}) async {
+/// [tamanhoMax]: lado máximo em pixels (fotos de perfil usam 512 para ficarem leves).
+Future<String?> escolherImagemBase64(BuildContext context, {ImageSource? origem, double tamanhoMax = 1080, int qualidade = 75}) async {
   final picker = ImagePicker();
   final src = origem ??
       await showModalBottomSheet<ImageSource>(
@@ -90,7 +91,7 @@ Future<String?> escolherImagemBase64(BuildContext context, {ImageSource? origem}
       );
   if (src == null) return null;
   try {
-    final x = await picker.pickImage(source: src, maxWidth: 1080, maxHeight: 1080, imageQuality: 75);
+    final x = await picker.pickImage(source: src, maxWidth: tamanhoMax, maxHeight: tamanhoMax, imageQuality: qualidade);
     if (x == null) return null;
     return base64Encode(await x.readAsBytes());
   } catch (e) {
@@ -226,5 +227,91 @@ class MarcaOngMais extends StatelessWidget {
       const SizedBox(width: 8),
       Text('ONG Mais', style: TextStyle(fontSize: tamanho, fontWeight: FontWeight.bold, color: AppColors.textDark)),
     ]);
+  }
+}
+
+/// Foto do voluntário ou a inicial do nome.
+class AvatarVoluntario extends StatelessWidget {
+  final String? fotoBase64;
+  final String nome;
+  final double raio;
+  final Color? fundo;
+  final Color? corTexto;
+  const AvatarVoluntario({super.key, this.fotoBase64, required this.nome, this.raio = 20, this.fundo, this.corTexto});
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = decodeBase64(fotoBase64);
+    final inicial = nome.trim().isNotEmpty ? nome.trim()[0].toUpperCase() : '?';
+    return CircleAvatar(
+      radius: raio,
+      backgroundColor: fundo ?? AppColors.accent.withValues(alpha: 0.18),
+      backgroundImage: bytes != null ? MemoryImage(bytes) : null,
+      child: bytes != null
+          ? null
+          : (nome.trim().isEmpty
+              ? Icon(Icons.person_rounded, size: raio * 1.1, color: corTexto ?? AppColors.primaryDark)
+              : Text(inicial, style: TextStyle(color: corTexto ?? AppColors.primaryDark, fontWeight: FontWeight.bold, fontSize: raio * 0.85))),
+    );
+  }
+}
+
+/// Avatar grande com botão de câmera para escolher/trocar a foto de perfil.
+class SeletorFotoPerfil extends StatelessWidget {
+  final String? fotoBase64;
+  final String nome;
+  final double raio;
+  final ValueChanged<String?> onAlterada; // null = remover
+  final bool fundoEscuro;
+  const SeletorFotoPerfil({super.key, this.fotoBase64, required this.nome, required this.onAlterada, this.raio = 48, this.fundoEscuro = false});
+
+  Future<void> _escolher(BuildContext context) async {
+    if (fotoBase64 != null) {
+      final acao = await showModalBottomSheet<String>(
+        context: context,
+        builder: (_) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Trocar foto'), onTap: () => Navigator.pop(context, 'trocar')),
+            ListTile(leading: const Icon(Icons.delete_outline, color: AppColors.danger), title: const Text('Remover foto', style: TextStyle(color: AppColors.danger)), onTap: () => Navigator.pop(context, 'remover')),
+          ]),
+        ),
+      );
+      if (acao == 'remover') {
+        onAlterada(null);
+        return;
+      }
+      if (acao != 'trocar' || !context.mounted) return;
+    }
+    final b64 = await escolherImagemBase64(context, tamanhoMax: 512, qualidade: 70);
+    if (b64 != null) onAlterada(b64);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _escolher(context),
+      child: Stack(children: [
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: fundoEscuro ? Colors.white : AppColors.primary),
+          child: AvatarVoluntario(
+            fotoBase64: fotoBase64,
+            nome: nome,
+            raio: raio,
+            fundo: fundoEscuro ? const Color(0xFFE6FAF4) : const Color(0xFFF1F3F5),
+            corTexto: AppColors.primary,
+          ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.orange, border: Border.all(color: Colors.white, width: 2)),
+            child: const Icon(Icons.photo_camera, size: 16, color: Colors.white),
+          ),
+        ),
+      ]),
+    );
   }
 }

@@ -2,6 +2,7 @@ import re
 
 from marshmallow import Schema, ValidationError, fields, validate, validates, validates_schema
 
+from .catalogo import areas_validas, telefone_erro
 from .models import CATEGORIAS_ONG, STATUS_INSCRICAO, TIPOS_CAMPANHA
 
 
@@ -47,9 +48,23 @@ class _SenhaMixin(Schema):
             raise ValidationError("As senhas não conferem.", field_name="confirmar_senha")
 
 
+def _lista_interesses(**kw):
+    return fields.List(
+        fields.Str(validate=validate.Length(max=60)),
+        validate=validate.Length(max=30, error="Escolha no máximo 30 interesses."),
+        **kw,
+    )
+
+
+# Foto de perfil em Base64: até ~1,5 MB de texto (o app já envia reduzida)
+_FOTO_MAX = 1_500_000
+
+
 class CadastroVoluntarioSchema(_SenhaMixin):
     nome_completo = fields.Str(required=True, validate=validate.Length(min=2, max=150))
     email = fields.Email(required=True)
+    interesses = _lista_interesses(load_default=list)
+    foto_base64 = fields.Str(load_default=None, allow_none=True, validate=validate.Length(max=_FOTO_MAX, error="Foto muito grande."))
 
 
 class CadastroOngSchema(_SenhaMixin):
@@ -62,6 +77,7 @@ class CadastroOngSchema(_SenhaMixin):
     longitude = fields.Float(load_default=None, allow_none=True)
     descricao = fields.Str(load_default=None, allow_none=True)
     logo_base64 = fields.Str(load_default=None, allow_none=True)
+    areas_atuacao = fields.List(fields.Str(), load_default=list)
     email = fields.Email(required=True)
 
     @validates("cnpj")
@@ -71,14 +87,29 @@ class CadastroOngSchema(_SenhaMixin):
 
     @validates("whatsapp")
     def valida_whatsapp(self, valor, **kwargs):
-        if len(somente_digitos(valor)) < 10:
-            raise ValidationError("WhatsApp inválido (informe DDD + número).")
+        msg = telefone_erro(valor)
+        if msg:
+            raise ValidationError(msg)
+
+    @validates_schema
+    def valida_areas(self, data, **kwargs):
+        _, invalidas = areas_validas(data.get("categoria", ""), data.get("areas_atuacao"))
+        if invalidas:
+            raise ValidationError(f"Áreas que não pertencem a {data.get('categoria')}: {', '.join(invalidas)}.", field_name="areas_atuacao")
 
 
 class AtualizarOngSchema(Schema):
     nome_fantasia = fields.Str(validate=validate.Length(min=2, max=150))
     categoria = fields.Str(validate=validate.OneOf(CATEGORIAS_ONG))
+    areas_atuacao = fields.List(fields.Str())
     whatsapp = fields.Str()
+
+    @validates("whatsapp")
+    def valida_whatsapp(self, valor, **kwargs):
+        msg = telefone_erro(valor)
+        if msg:
+            raise ValidationError(msg)
+
     endereco = fields.Str(allow_none=True)
     latitude = fields.Float(allow_none=True)
     longitude = fields.Float(allow_none=True)
@@ -88,7 +119,8 @@ class AtualizarOngSchema(Schema):
 
 class AtualizarVoluntarioSchema(Schema):
     nome_completo = fields.Str(validate=validate.Length(min=2, max=150))
-    interesses = fields.List(fields.Str(), allow_none=True)
+    interesses = _lista_interesses(allow_none=True)
+    foto_base64 = fields.Str(allow_none=True, validate=validate.Length(max=_FOTO_MAX, error="Foto muito grande."))
 
 
 class CampanhaSchema(Schema):

@@ -5,6 +5,7 @@ import '../core/api_service.dart';
 import '../core/theme.dart';
 import '../core/utils.dart';
 import '../models/models.dart';
+import '../screens/ong/perfil_voluntario_publico_screen.dart';
 import 'common.dart';
 
 /// Abre os comentários da campanha. Retorna o total atualizado (ou null se não mudou).
@@ -185,17 +186,18 @@ class _ComentariosSheetState extends State<_ComentariosSheet> {
       separatorBuilder: (context, index) => const SizedBox(height: 2),
       itemBuilder: (_, i) {
         final c = _lista![i];
+        // qualquer pessoa logada (ONG ou voluntário) abre o perfil de um voluntário que comentou
+        final podeVerPerfil = !c.daOng;
         return ListTile(
           titleAlignment: ListTileTitleAlignment.top,
+          onTap: podeVerPerfil
+              ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => PerfilVoluntarioPublicoScreen(voluntarioId: c.usuarioId, nomeInicial: c.autorNome)))
+              : null,
           leading: c.daOng
               ? AvatarBase64(base64: c.autorLogoBase64, raio: 18, fallback: Icons.apartment_rounded, fundo: AppColors.primary.withValues(alpha: 0.15), corIcone: AppColors.primary)
-              : CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppColors.accent.withValues(alpha: 0.18),
-                  child: Text(c.autorNome.isNotEmpty ? c.autorNome[0].toUpperCase() : '?', style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
-                ),
+              : AvatarVoluntario(fotoBase64: c.autorFotoBase64, nome: c.autorNome, raio: 18),
           title: Row(children: [
-            Flexible(child: Text(c.autorNome, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+            Flexible(child: Text(c.autorNome, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: podeVerPerfil ? AppColors.primaryDark : AppColors.textDark))),
             if (c.daOng) ...[const SizedBox(width: 6), const Etiqueta(texto: 'ONG', cor: AppColors.primary)],
             const SizedBox(width: 6),
             Text(tempoRelativo(c.criadoEm), style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
