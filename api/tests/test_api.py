@@ -44,9 +44,13 @@ def test_fluxo_completo(client):
     r = client.post(f"/campanhas/{camp['id']}/curtir", headers=vol)
     assert r.get_json() == {"curtiu": False, "curtidas": 0}
 
-    # Inscrever (Quero Ajudar) -> Pendente
-    r = client.post(f"/campanhas/{camp['id']}/inscricoes", headers=vol)
+    # Inscrever (Quero Ajudar) -> Pendente. A campanha do seed tem turnos: é preciso escolher um.
+    assert len(camp["turnos"]) == 2 and camp["turnos"][0]["ocupadas"] == 0
+    assert client.post(f"/campanhas/{camp['id']}/inscricoes", headers=vol).status_code == 422
+    turno = camp["turnos"][0]
+    r = client.post(f"/campanhas/{camp['id']}/inscricoes", json={"turno_id": turno["id"]}, headers=vol)
     assert r.status_code == 201 and r.get_json()["status"] == "PENDENTE"
+    assert r.get_json()["turno"]["id"] == turno["id"]
     insc_id = r.get_json()["id"]
 
     # Minhas inscrições
@@ -287,3 +291,90 @@ def test_cadastro_voluntario_com_foto_e_interesses(client):
     r = client.put("/voluntarios/me", json={"foto_base64": None}, headers=ana)
     assert r.status_code == 200 and r.get_json()["foto_base64"] is None
     assert client.put("/voluntarios/me", json={"foto_base64": "x" * 1_600_000}, headers=ana).status_code == 422
+
+
+
+def test_chat_da_inscricao(client):
+    ong = _login(client, "contato@patinhascarentes.org.br")
+    vol = _login(client, "voluntario@teste.com")
+    insc = client.get("/inscricoes/minhas", headers=vol).get_json()[0]
+    iid = insc["id"]
+
+    # a inscrição já abriu a conversa; ONG tem mensagens não lidas
+    assert client.get("/inscricoes/nao-lidas", headers=ong).get_json()["total"] >= 1
+    r = client.get(f"/inscricoes/{iid}/mensagens", headers=ong)
+    assert r.status_code == 200 and r.get_json()["mensagens"][0]["texto"].startswith("Olá! Quero ajudar")
+    assert client.get("/inscricoes/nao-lidas", headers=ong).get_json()["total"] == 0  # leu ao abrir
+
+    # ONG responde; voluntário vê como não lida, depois lida
+    r = client.post(f"/inscricoes/{iid}/mensagens", json={"texto": "Te esperamos às 9h!"}, headers=ong)
+    assert r.status_code == 201 and r.get_json()["minha"] is True
+    minhas = client.get("/inscricoes/minhas", headers=vol).get_json()
+    assert minhas[0]["mensagens_nao_lidas"] >= 1 and minhas[0]["ultima_mensagem"]["texto"] == "Te esperamos às 9h!"
+    msgs = client.get(f"/inscricoes/{iid}/mensagens", headers=vol).get_json()["mensagens"]
+    assert msgs[-1]["minha"] is False
+    assert client.post(f"/inscricoes/{iid}/mensagens", json={"texto": " "}, headers=vol).status_code == 422
+
+    # outra ONG / outro voluntário não acessam
+    r = client.post("/auth/registro/voluntario", json={"nome_completo": "Intruso", "email": "intruso@x.com", "senha": "123456"})
+    intruso = {"Authorization": f"Bearer {r.get_json()['access_token']}"}
+    assert client.get(f"/inscricoes/{iid}/mensagens", headers=intruso).status_code == 404
+
+
+def test_turnos_lotacao_e_horas(client):
+    ong = _login(client, "contato@patinhascarentes.org.br")
+    from datetime import datetime, timedelta, timezone
+
+    ini = (datetime.now(timezone.utc) + timedelta(days=3)).replace(microsecond=0)
+    r = client.post(
+        "/campanhas",
+        json={"tipo": "VOLUNTARIADO", "titulo": "Mutirão", "turnos": [{"inicio": ini.isoformat(), "fim": (ini + timedelta(hours=2, minutes=30)).isoformat(), "vagas": 1}]},
+        headers=ong,
+    )
+    assert r.status_code == 201, r.get_json()
+    camp = r.get_json()
+    turno = camp["turnos"][0]
+    assert turno["horas"] == 3 and turno["vagas"] == 1  # 2h30 arredonda para 3h
+    # turno inválido (fim antes do início)
+    r = client.put(f"/campanhas/{camp['id']}", json={"turnos": [{"inicio": ini.isoformat(), "fim": ini.isoformat(), "vagas": 2}]}, headers=ong)
+    assert r.status_code == 422
+
+    def novo_vol(email):
+        r = client.post("/auth/registro/voluntario", json={"nome_completo": email, "email": email, "senha": "123456"})
+        return {"Authorization": f"Bearer {r.get_json()['access_token']}"}
+
+    a, b = novo_vol("a@turno.com"), novo_vol("b@turno.com")
+    r = client.post(f"/campanhas/{camp['id']}/inscricoes", json={"turno_id": turno["id"]}, headers=a)
+    assert r.status_code == 201
+    iid = r.get_json()["id"]
+    r = client.post(f"/campanhas/{camp['id']}/inscricoes", json={"turno_id": turno["id"]}, headers=b)
+    assert r.status_code == 409  # lotado
+
+    # concluir sem informar horas usa a duração do turno
+    client.patch(f"/inscricoes/{iid}", json={"status": "APROVADO"}, headers=ong)
+    r = client.patch(f"/inscricoes/{iid}", json={"status": "CONCLUIDO"}, headers=ong)
+    assert r.status_code == 200 and r.get_json()["horas"] == 3
+    msgs = client.get(f"/inscricoes/{iid}/mensagens", headers=a).get_json()["mensagens"]
+    assert "aprovada" in msgs[1]["texto"] and "3h" in msgs[2]["texto"]
+
+    # editar mantendo o turno pelo id não perde a inscrição; remover o turno solta a inscrição
+    r = client.put(f"/campanhas/{camp['id']}", json={"turnos": [{**turno, "vagas": 5}]}, headers=ong)
+    assert r.get_json()["turnos"][0]["vagas"] == 5 and r.get_json()["turnos"][0]["ocupadas"] == 1
+    r = client.put(f"/campanhas/{camp['id']}", json={"turnos": []}, headers=ong)
+    assert r.get_json()["turnos"] == []
+
+
+def test_doacoes_itens_e_pix(client):
+    ong = _login(client, "contato@patinhascarentes.org.br")
+    vol = _login(client, "voluntario@teste.com")
+    doa = next(c for c in client.get("/campanhas", headers=vol).get_json() if c["tipo"] == "DOACAO")
+    assert [i["nome"] for i in doa["itens"]] == ["Ração", "Cobertores", "Medicamentos"]
+    assert doa["itens"][0]["percentual"] == 40 and doa["ong_chave_pix"]
+
+    item = doa["itens"][0]
+    r = client.patch(f"/campanhas/itens/{item['id']}", json={"arrecadado": 150}, headers=ong)
+    assert r.status_code == 200 and r.get_json()["percentual"] == 100  # não passa de 100%
+    assert client.patch(f"/campanhas/itens/{item['id']}", json={"arrecadado": 1}, headers=vol).status_code == 403
+
+    r = client.put("/ongs/me", json={"chave_pix": "12.345.678/0001-95"}, headers=ong)
+    assert r.status_code == 200 and r.get_json()["chave_pix"] == "12.345.678/0001-95"

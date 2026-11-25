@@ -23,6 +23,7 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
   late final _whats = TextEditingController(text: formatarTelefone(widget.ong.whatsapp));
   late final _endereco = TextEditingController(text: widget.ong.endereco ?? '');
   late final _descricao = TextEditingController(text: widget.ong.descricao ?? '');
+  late final _pix = TextEditingController(text: widget.ong.chavePix ?? '');
   late String _categoria = categoriasOng.contains(widget.ong.categoria) ? widget.ong.categoria : 'Outros';
   late List<String> _areas = [...widget.ong.areasAtuacao];
   late String? _logo = widget.ong.logoBase64;
@@ -33,7 +34,7 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
 
   @override
   void dispose() {
-    for (final c in [_nome, _whats, _endereco, _descricao]) {
+    for (final c in [_nome, _whats, _endereco, _descricao, _pix]) {
       c.dispose();
     }
     super.dispose();
@@ -66,6 +67,7 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
         'latitude': _lat,
         'longitude': _lng,
         'descricao': _descricao.text.trim().isEmpty ? null : _descricao.text.trim(),
+        'chave_pix': _pix.text.trim().isEmpty ? null : _pix.text.trim(),
         'logo_base64': _logo,
       });
       if (!mounted) return;
@@ -172,6 +174,14 @@ class _EditarPerfilOngScreenState extends State<EditarPerfilOngScreen> {
             CampoRotulado(
               rotulo: 'Sobre a ONG',
               campo: TextFormField(controller: _descricao, maxLines: 5, decoration: const InputDecoration(hintText: 'Conte sobre o trabalho e a missão da ONG...')),
+            ),
+            CampoRotulado(
+              rotulo: 'Chave PIX (para doações financeiras)',
+              campo: TextFormField(
+                controller: _pix,
+                maxLength: 120,
+                decoration: const InputDecoration(hintText: 'CNPJ, e-mail, telefone ou chave aleatória', prefixIcon: Icon(Icons.pix_rounded)),
+              ),
             ),
             ElevatedButton.icon(
               onPressed: _salvando ? null : _salvar,

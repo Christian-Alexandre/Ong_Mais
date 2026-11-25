@@ -1,10 +1,23 @@
 """Dados do "Teste Rápido 1-clique" (ver spec, seção Seed)."""
 from .extensions import bcrypt, db
-from .models import PAPEL_ONG, PAPEL_VOLUNTARIO, Campanha, Ong, Usuario, Voluntario
+from datetime import datetime, timedelta, timezone
+
+from .models import PAPEL_ONG, PAPEL_VOLUNTARIO, Campanha, ItemDoacao, Ong, Turno, Usuario, Voluntario
 
 SEED_ONG_EMAIL = "contato@patinhascarentes.org.br"
 SEED_VOL_EMAIL = "voluntario@teste.com"
 SEED_SENHA = "123456"
+
+
+def _turnos_de_exemplo() -> list[Turno]:
+    """Dois sábados seguintes, 9h-12h em Brasília (12h-15h UTC), 8 vagas cada."""
+    agora = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
+    dias = (5 - agora.weekday()) % 7 or 7
+    turnos = []
+    for semanas in (0, 1):
+        ini = (agora + timedelta(days=dias + 7 * semanas)).replace(hour=12)
+        turnos.append(Turno(inicio=ini, fim=ini + timedelta(hours=3), vagas=8))
+    return turnos
 
 
 def semear(forcar: bool = False) -> bool:
@@ -21,6 +34,7 @@ def semear(forcar: bool = False) -> bool:
             cnpj="12.345.678/0001-95",  # dígitos verificadores válidos
             categoria="Animais",
             areas_atuacao=["Adoção", "Resgate de animais", "Cuidados veterinários"],
+            chave_pix="contato@patinhascarentes.org.br",
             whatsapp="11987654321",
             endereco="Av. Paulista, 1000 - Bela Vista, São Paulo - SP",
             latitude=-23.5653,
@@ -38,6 +52,7 @@ def semear(forcar: bool = False) -> bool:
                     "Precisamos de voluntários aos sábados pela manhã para passear com os cães, "
                     "ajudar na limpeza dos canis e dar carinho aos animais do abrigo."
                 ),
+                turnos=_turnos_de_exemplo(),
             ),
             Campanha(
                 tipo="DOACAO",
@@ -46,6 +61,11 @@ def semear(forcar: bool = False) -> bool:
                     "Estamos arrecadando cobertores e ração para os 80 animais do abrigo "
                     "enfrentarem o inverno. Entregas na sede ou combine a retirada pelo WhatsApp."
                 ),
+                itens=[
+                    ItemDoacao(nome="Ração", unidade="kg", meta=100, arrecadado=40),
+                    ItemDoacao(nome="Cobertores", unidade="un", meta=80, arrecadado=25),
+                    ItemDoacao(nome="Medicamentos", unidade="caixas", meta=30, arrecadado=6),
+                ],
             ),
         ]
         db.session.add(ong_user)

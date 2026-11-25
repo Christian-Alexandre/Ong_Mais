@@ -1,17 +1,28 @@
+from datetime import timezone
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 
 from ..extensions import db
 from ..models import (
+    PAPEL_ONG,
     PAPEL_VOLUNTARIO,
     STATUS_PENDENTE,
-    PAPEL_ONG,
     Campanha,
     Comentario,
     Curtida,
     Inscricao,
+    ItemDoacao,
+    Mensagem,
+    Turno,
 )
-from ..schemas import AtualizarCampanhaSchema, CampanhaSchema, ComentarioSchema
+from ..schemas import (
+    AtualizarCampanhaSchema,
+    AtualizarItemSchema,
+    CampanhaSchema,
+    ComentarioSchema,
+    InscreverSchema,
+)
 from ..utils import ONG, VOLUNTARIO, erro, papel_atual, papel_requerido, usuario_id_atual, validar
 
 bp = Blueprint("campanhas", __name__, url_prefix="/campanhas")
@@ -44,8 +55,16 @@ def feed():
 @papel_requerido(ONG)
 def minhas():
     """Campanhas da ONG logada (Meu Painel), incluindo inativas."""
-    stmt = db.select(Campanha).filter_by(ong_id=usuario_id_atual()).order_by(Campanha.criado_em.desc())
-    return jsonify([c.to_dict() for c in db.session.scalars(stmt).all()])
+    ong_id = usuario_id_atual()
+    stmt = db.select(Campanha).filter_by(ong_id=ong_id).order_by(Campanha.criado_em.desc())
+    itens = []
+    for c in db.session.scalars(stmt).all():
+        d = c.to_dict()
+        d["mensagens_nao_lidas"] = sum(
+            1 for i in c.inscricoes for m in i.mensagens if m.autor_id != ong_id and m.lida_em is None
+        )
+        itens.append(d)
+    return jsonify(itens)
 
 
 @bp.get("/<int:campanha_id>")
@@ -63,10 +82,54 @@ def criar():
     dados, err = validar(CampanhaSchema(), request.get_json(silent=True))
     if err:
         return err
+    turnos, itens = dados.pop("turnos", []), dados.pop("itens", [])
     c = Campanha(ong_id=usuario_id_atual(), **dados)
     db.session.add(c)
+    _sincronizar_turnos(c, turnos)
+    _sincronizar_itens(c, itens)
     db.session.commit()
     return jsonify(c.to_dict()), 201
+
+
+def _naive_utc(dt):
+    return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def _sincronizar_turnos(c: Campanha, lista: list[dict]) -> None:
+    """Deixa os turnos da campanha iguais à lista: atualiza pelos ids, cria os novos e
+    remove os que sumiram (as inscrições desses turnos ficam sem turno)."""
+    existentes = {t.id: t for t in c.turnos}
+    manter = set()
+    for d in lista:
+        t = existentes.get(d.get("id")) if d.get("id") else None
+        if t is None:
+            t = Turno()
+            c.turnos.append(t)
+        else:
+            manter.add(t.id)
+        t.inicio, t.fim, t.vagas = _naive_utc(d["inicio"]), _naive_utc(d["fim"]), d["vagas"]
+    for tid, t in existentes.items():
+        if tid not in manter:
+            for i in list(t.inscricoes):
+                i.turno = None
+            c.turnos.remove(t)
+
+
+def _sincronizar_itens(c: Campanha, lista: list[dict]) -> None:
+    existentes = {i.id: i for i in c.itens}
+    manter = set()
+    for d in lista:
+        item = existentes.get(d.get("id")) if d.get("id") else None
+        if item is None:
+            item = ItemDoacao()
+            c.itens.append(item)
+        else:
+            manter.add(item.id)
+        item.nome, item.unidade, item.meta = d["nome"].strip(), d.get("unidade") or "un", d["meta"]
+        item.arrecadado = d.get("arrecadado", item.arrecadado or 0)
+    for iid, item in existentes.items():
+        if iid not in manter:
+            c.itens.remove(item)
 
 
 def _campanha_da_ong(campanha_id: int):
@@ -87,10 +150,29 @@ def atualizar(campanha_id: int):
     dados, err = validar(AtualizarCampanhaSchema(), request.get_json(silent=True), partial=True)
     if err:
         return err
+    if "turnos" in dados:
+        _sincronizar_turnos(c, dados.pop("turnos"))
+    if "itens" in dados:
+        _sincronizar_itens(c, dados.pop("itens"))
     for campo, valor in dados.items():
         setattr(c, campo, valor)
     db.session.commit()
     return jsonify(c.to_dict())
+
+
+@bp.patch("/itens/<int:item_id>")
+@papel_requerido(ONG)
+def atualizar_item(item_id: int):
+    """A ONG registra quanto já arrecadou de um item."""
+    item = db.session.get(ItemDoacao, item_id)
+    if not item or item.campanha.ong_id != usuario_id_atual():
+        return erro("Item não encontrado.", 404)
+    dados, err = validar(AtualizarItemSchema(), request.get_json(silent=True))
+    if err:
+        return err
+    item.arrecadado = dados["arrecadado"]
+    db.session.commit()
+    return jsonify(item.to_dict())
 
 
 @bp.delete("/<int:campanha_id>")
@@ -140,11 +222,30 @@ def inscrever(campanha_id: int):
     vol_id = usuario_id_atual()
     existente = db.session.scalar(db.select(Inscricao).filter_by(campanha_id=campanha_id, voluntario_id=vol_id))
     if existente:
-        return jsonify(existente.to_dict()), 200
-    insc = Inscricao(campanha_id=campanha_id, voluntario_id=vol_id, status=STATUS_PENDENTE)
+        return jsonify(existente.to_dict(leitor_id=vol_id)), 200
+    dados, err = validar(InscreverSchema(), request.get_json(silent=True))
+    if err:
+        return err
+
+    turno = None
+    abertos = [t for t in c.turnos if not t.encerrado()]
+    if abertos:
+        # campanha com turnos: o voluntário escolhe um com vaga
+        turno = next((t for t in abertos if t.id == dados.get("turno_id")), None)
+        if turno is None:
+            return erro("Escolha um dos turnos disponíveis.", 422)
+        if turno.ocupadas >= turno.vagas:
+            return erro("Este turno já está lotado. Escolha outro.", 409)
+
+    insc = Inscricao(campanha_id=campanha_id, voluntario_id=vol_id, status=STATUS_PENDENTE, turno=turno)
     db.session.add(insc)
+    # Abre a conversa com a ONG já com a primeira mensagem
+    texto = f'Olá! Quero ajudar na campanha "{c.titulo}".'
+    if turno:
+        texto += " Escolhi o turno indicado na inscrição."
+    insc.mensagens.append(Mensagem(autor_id=vol_id, texto=texto))
     db.session.commit()
-    return jsonify(insc.to_dict()), 201
+    return jsonify(insc.to_dict(leitor_id=vol_id)), 201
 
 
 @bp.get("/<int:campanha_id>/inscricoes")
@@ -155,7 +256,7 @@ def inscritos(campanha_id: int):
     if err:
         return err
     lista = sorted(c.inscricoes, key=lambda i: i.criado_em, reverse=True)
-    return jsonify([i.to_dict(incluir_campanha=False, incluir_voluntario=True) for i in lista])
+    return jsonify([i.to_dict(incluir_campanha=False, incluir_voluntario=True, leitor_id=c.ong_id) for i in lista])
 
 
 # ---------- Comentários ----------

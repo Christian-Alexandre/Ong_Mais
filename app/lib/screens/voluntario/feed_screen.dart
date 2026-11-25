@@ -8,10 +8,12 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
+import '../../widgets/campanha_extras.dart';
 import '../../widgets/comentarios_sheet.dart';
 import '../../widgets/common.dart';
 import '../../widgets/compartilhar.dart';
 import '../../widgets/interesses.dart';
+import '../conversa_screen.dart';
 import '../ong/perfil_publico_screen.dart';
 import 'minhas_inscricoes_tab.dart';
 
@@ -105,28 +107,41 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
     }
   }
 
-  /// Quero Ajudar: Voluntariado → inscrição Pendente + WhatsApp; Doação/Financeiro → só WhatsApp.
+  /// Quero Ajudar:
+  /// - Voluntariado: escolhe o turno, inscreve e abre a conversa no app (ou prefere o WhatsApp).
+  /// - Doação/Financeiro: folha "Como ajudar" com itens, chave PIX e WhatsApp.
   Future<void> _queroAjudar(Campanha c) async {
-    final msg = 'Olá, ${c.ongNome}! Vi a campanha "${c.titulo}" no ONG Mais e quero ajudar.';
-    if (c.tipo == TipoCampanha.voluntariado) {
-      if (c.minhaInscricao != null) {
-        mostrarSnack(context, 'Você já está inscrito nesta campanha (${StatusInscricao.rotulo(c.minhaInscricao!.status)}).');
-        await abrirWhatsApp(c.ongWhatsapp, msg);
-        return;
-      }
-      try {
-        final insc = await ApiService.instance.inscrever(c.id);
-        if (!mounted) return;
-        setState(() => c.minhaInscricao = insc);
-        mostrarSnack(context, 'Inscrição confirmada na campanha "${c.titulo}"!');
-        unawaited(_carregar());
-      } catch (e) {
-        if (mounted) mostrarSnack(context, 'Erro ao se inscrever: $e', erro: true);
-        return;
-      }
+    if (c.tipo != TipoCampanha.voluntariado) {
+      await abrirComoAjudar(context, c);
+      return;
     }
-    final ok = await abrirWhatsApp(c.ongWhatsapp, msg);
-    if (!ok && mounted) mostrarSnack(context, 'Não foi possível abrir o WhatsApp da ONG.', erro: true);
+    if (c.minhaInscricao != null) {
+      await _abrirConversa(c.minhaInscricao!.id, c.ongNome);
+      return;
+    }
+    final escolha = await escolherComoAjudar(context, c);
+    if (escolha == null || !mounted) return;
+    if (escolha is PreferirWhatsApp) {
+      final ok = await abrirWhatsApp(c.ongWhatsapp, 'Olá, ${c.ongNome}! Vi a campanha "${c.titulo}" no ONG Mais e quero ajudar.');
+      if (!ok && mounted) mostrarSnack(context, 'Não foi possível abrir o WhatsApp da ONG.', erro: true);
+      return;
+    }
+    final turno = (escolha as InscreverNoTurno).turno;
+    try {
+      final insc = await ApiService.instance.inscrever(c.id, turnoId: turno?.id);
+      if (!mounted) return;
+      setState(() => c.minhaInscricao = insc);
+      mostrarSnack(context, 'Inscrição enviada! Converse com a ONG por aqui.');
+      await _abrirConversa(insc.id, c.ongNome);
+    } catch (e) {
+      if (mounted) mostrarSnack(context, 'Erro ao se inscrever: $e', erro: true);
+      unawaited(_carregar()); // turno pode ter lotado: atualiza as vagas
+    }
+  }
+
+  Future<void> _abrirConversa(int inscricaoId, String? nome) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => ConversaScreen(inscricaoId: inscricaoId, souOng: false, tituloInicial: nome)));
+    if (mounted) unawaited(_carregar()); // atualiza status e não lidas
   }
 
   Future<void> _cancelarInscricao(Inscricao i) async {
@@ -155,6 +170,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final nExplorar = _campanhas?.length ?? 0;
     final nInsc = _inscricoes?.length ?? 0;
+    final naoLidas = _inscricoes?.fold<int>(0, (t, i) => t + i.naoLidas) ?? 0;
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
@@ -167,7 +183,17 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
           indicatorColor: AppColors.primary,
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          tabs: [Tab(text: 'Explorar Ações ($nExplorar)'), Tab(text: 'Minhas Inscrições ($nInsc)')],
+          tabs: [
+            Tab(text: 'Explorar Ações ($nExplorar)'),
+            Tab(
+              child: Badge(
+                isLabelVisible: naoLidas > 0,
+                label: Text('$naoLidas'),
+                offset: const Offset(12, -6),
+                child: Text('Minhas Inscrições ($nInsc)'),
+              ),
+            ),
+          ],
         ),
       ),
       body: TabBarView(
@@ -179,6 +205,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
             erro: _erro,
             onRecarregar: _carregar,
             onCancelar: _cancelarInscricao,
+            onConversar: (i) => _abrirConversa(i.id, i.ongNome),
           ),
         ],
       ),
@@ -327,8 +354,8 @@ class _CardCampanha extends StatelessWidget {
             const Spacer(),
             ElevatedButton.icon(
               onPressed: onAjudar,
-              icon: Icon(inscrito ? Icons.check_rounded : Icons.handshake_outlined, size: 20),
-              label: Text(inscrito ? 'Inscrito' : 'Quero Ajudar'),
+              icon: Icon(inscrito ? Icons.forum_outlined : Icons.handshake_outlined, size: 20),
+              label: Text(inscrito ? 'Conversar' : 'Quero Ajudar'),
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(0, 44),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -355,6 +382,22 @@ class _CardCampanha extends StatelessWidget {
                 ],
               ),
             ),
+            if (c.tipo == TipoCampanha.voluntariado) ResumoTurnos(campanha: c),
+            if (c.tipo == TipoCampanha.doacao) ProgressoDoacao(itens: c.itens),
+            if (inscrito) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                Etiqueta(
+                  texto: 'Inscrição: ${StatusInscricao.rotulo(c.minhaInscricao!.status)}',
+                  cor: StatusInscricao.cor(c.minhaInscricao!.status),
+                  icone: StatusInscricao.icone(c.minhaInscricao!.status),
+                ),
+                if (c.minhaInscricao!.turno != null) ...[
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(formatarTurno(c.minhaInscricao!.turno!), style: const TextStyle(color: AppColors.textGrey, fontSize: 13))),
+                ],
+              ]),
+            ],
             if (c.comentarios > 0) ...[
               const SizedBox(height: 6),
               InkWell(

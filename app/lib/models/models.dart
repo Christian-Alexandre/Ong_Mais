@@ -21,6 +21,7 @@ class Ong {
   final int campanhasAtivas;
   final double? distanciaKm;
   final List<Campanha> campanhas;
+  final String? chavePix;
 
   Ong({
     required this.id,
@@ -38,6 +39,7 @@ class Ong {
     this.campanhasAtivas = 0,
     this.distanciaKm,
     this.campanhas = const [],
+    this.chavePix,
   });
 
   bool get temCoordenadas => latitude != null && longitude != null;
@@ -61,6 +63,7 @@ class Ong {
         campanhasAtivas: _int(j['campanhas_ativas']),
         distanciaKm: _double(j['distancia_km']),
         campanhas: (j['campanhas'] as List? ?? []).map((e) => Campanha.fromJson(e)).toList(),
+        chavePix: j['chave_pix'],
       );
 }
 
@@ -120,6 +123,13 @@ class Campanha {
   final int inscritos;
   int comentarios;
   Inscricao? minhaInscricao;
+  final List<Turno> turnos;
+  final List<ItemDoacao> itens;
+  final String? ongChavePix;
+  final int mensagensNaoLidas;
+
+  /// Turnos que ainda não terminaram (os que o voluntário pode escolher).
+  List<Turno> get turnosAbertos => turnos.where((t) => !t.encerrado).toList();
 
   /// Categoria + áreas da ONG dona da campanha.
   List<String> get ongTags => tagsDaOng(ongCategoria, ongAreasAtuacao);
@@ -143,6 +153,10 @@ class Campanha {
     this.inscritos = 0,
     this.comentarios = 0,
     this.minhaInscricao,
+    this.turnos = const [],
+    this.itens = const [],
+    this.ongChavePix,
+    this.mensagensNaoLidas = 0,
   });
 
   factory Campanha.fromJson(Map<String, dynamic> j) => Campanha(
@@ -164,6 +178,93 @@ class Campanha {
         inscritos: _int(j['inscritos']),
         comentarios: _int(j['comentarios']),
         minhaInscricao: j['minha_inscricao'] == null ? null : Inscricao.fromJson(j['minha_inscricao']),
+        turnos: (j['turnos'] as List? ?? []).map((e) => Turno.fromJson(Map<String, dynamic>.from(e))).toList(),
+        itens: (j['itens'] as List? ?? []).map((e) => ItemDoacao.fromJson(Map<String, dynamic>.from(e))).toList(),
+        ongChavePix: j['ong_chave_pix'],
+        mensagensNaoLidas: _int(j['mensagens_nao_lidas']),
+      );
+}
+
+/// Horário de uma campanha de voluntariado, com número de vagas.
+class Turno {
+  final int? id;
+  final DateTime inicio; // horário local
+  final DateTime fim;
+  final int vagas;
+  final int ocupadas;
+  final int horas;
+  final bool encerrado;
+
+  Turno({this.id, required this.inicio, required this.fim, required this.vagas, this.ocupadas = 0, this.horas = 0, this.encerrado = false});
+
+  int get vagasLivres => (vagas - ocupadas).clamp(0, vagas);
+  bool get lotado => vagasLivres == 0;
+
+  factory Turno.fromJson(Map<String, dynamic> j) => Turno(
+        id: j['id'] == null ? null : _int(j['id']),
+        inicio: parseUtc(j['inicio']) ?? DateTime.now(),
+        fim: parseUtc(j['fim']) ?? DateTime.now(),
+        vagas: _int(j['vagas']),
+        ocupadas: _int(j['ocupadas']),
+        horas: _int(j['horas']),
+        encerrado: j['encerrado'] == true,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'inicio': inicio.toUtc().toIso8601String(),
+        'fim': fim.toUtc().toIso8601String(),
+        'vagas': vagas,
+      };
+}
+
+/// Item pedido numa campanha de doação, com meta e quanto já chegou.
+class ItemDoacao {
+  final int? id;
+  final String nome;
+  final String unidade;
+  final double meta;
+  final double arrecadado;
+
+  ItemDoacao({this.id, required this.nome, this.unidade = 'un', required this.meta, this.arrecadado = 0});
+
+  double get progresso => meta <= 0 ? 0 : (arrecadado / meta).clamp(0, 1).toDouble();
+
+  factory ItemDoacao.fromJson(Map<String, dynamic> j) => ItemDoacao(
+        id: j['id'] == null ? null : _int(j['id']),
+        nome: j['nome'] ?? '',
+        unidade: j['unidade'] ?? 'un',
+        meta: _double(j['meta']) ?? 0,
+        arrecadado: _double(j['arrecadado']) ?? 0,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'nome': nome,
+        'unidade': unidade,
+        'meta': meta,
+        'arrecadado': arrecadado,
+      };
+}
+
+/// Mensagem da conversa entre voluntário e ONG sobre uma inscrição.
+class Mensagem {
+  final int id;
+  final int autorId;
+  final String texto;
+  final DateTime? criadoEm;
+  final bool lida;
+  final bool minha;
+
+  Mensagem({required this.id, required this.autorId, required this.texto, this.criadoEm, this.lida = false, this.minha = false});
+
+  factory Mensagem.fromJson(Map<String, dynamic> j) => Mensagem(
+        id: _int(j['id']),
+        autorId: _int(j['autor_id']),
+        texto: j['texto'] ?? '',
+        criadoEm: parseUtc(j['criado_em']),
+        lida: j['lida'] == true,
+        minha: j['minha'] == true,
       );
 }
 
@@ -182,6 +283,12 @@ class Inscricao {
   final String? voluntarioEmail;
   final List<String> voluntarioInteresses;
   final String? voluntarioFotoBase64;
+  final Turno? turno;
+  final int naoLidas;
+  final String? ultimaMensagem;
+  final bool ultimaMensagemMinha;
+  final int? ongId;
+  final String? ongLogoBase64;
 
   Inscricao({
     required this.id,
@@ -198,6 +305,12 @@ class Inscricao {
     this.voluntarioEmail,
     this.voluntarioInteresses = const [],
     this.voluntarioFotoBase64,
+    this.turno,
+    this.naoLidas = 0,
+    this.ultimaMensagem,
+    this.ultimaMensagemMinha = false,
+    this.ongId,
+    this.ongLogoBase64,
   });
 
   bool get pendente => status == 'PENDENTE';
@@ -217,6 +330,12 @@ class Inscricao {
         voluntarioEmail: j['voluntario_email'],
         voluntarioInteresses: _strs(j['voluntario_interesses']),
         voluntarioFotoBase64: j['voluntario_foto_base64'],
+        turno: j['turno'] == null ? null : Turno.fromJson(Map<String, dynamic>.from(j['turno'])),
+        naoLidas: _int(j['mensagens_nao_lidas']),
+        ultimaMensagem: j['ultima_mensagem']?['texto'],
+        ultimaMensagemMinha: j['ultima_mensagem']?['minha'] == true,
+        ongId: j['ong_id'] == null ? null : _int(j['ong_id']),
+        ongLogoBase64: j['ong_logo_base64'],
       );
 }
 

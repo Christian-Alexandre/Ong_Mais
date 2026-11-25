@@ -5,6 +5,7 @@ import '../../core/api_service.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
+import '../../widgets/campanha_extras.dart';
 import '../../widgets/common.dart';
 
 /// Abre o bottom sheet de Nova Campanha (ou edição). Retorna true se salvou.
@@ -31,6 +32,8 @@ class _NovaCampanhaSheetState extends State<_NovaCampanhaSheet> {
   late final _descricao = TextEditingController(text: widget.editar?.descricao ?? '');
   late String _tipo = widget.editar?.tipo ?? TipoCampanha.voluntariado;
   late String? _foto = widget.editar?.fotoBase64;
+  late final List<Turno> _turnos = [...?widget.editar?.turnos];
+  late final List<ItemDoacao> _itens = [...?widget.editar?.itens];
   bool _salvando = false;
 
   bool get _edicao => widget.editar != null;
@@ -52,6 +55,9 @@ class _NovaCampanhaSheetState extends State<_NovaCampanhaSheet> {
       mostrarSnack(context, 'Informe o título da campanha.', erro: true);
       return;
     }
+    // Turnos só no voluntariado; itens só na doação.
+    final turnos = _tipo == TipoCampanha.voluntariado ? _turnos : <Turno>[];
+    final itens = _tipo == TipoCampanha.doacao ? _itens : <ItemDoacao>[];
     setState(() => _salvando = true);
     try {
       if (_edicao) {
@@ -60,6 +66,8 @@ class _NovaCampanhaSheetState extends State<_NovaCampanhaSheet> {
           'titulo': _titulo.text.trim(),
           'descricao': _descricao.text.trim().isEmpty ? null : _descricao.text.trim(),
           'foto_base64': _foto,
+          'turnos': turnos.map((t) => t.toJson()).toList(),
+          'itens': itens.map((i) => i.toJson()).toList(),
         });
       } else {
         await ApiService.instance.criarCampanha(
@@ -67,6 +75,8 @@ class _NovaCampanhaSheetState extends State<_NovaCampanhaSheet> {
           titulo: _titulo.text,
           descricao: _descricao.text.trim().isEmpty ? null : _descricao.text,
           fotoBase64: _foto,
+          turnos: turnos,
+          itens: itens,
         );
       }
       if (!mounted) return;
@@ -122,6 +132,8 @@ class _NovaCampanhaSheetState extends State<_NovaCampanhaSheet> {
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(hintText: 'Descrição e Instruções'),
             ),
+            if (_tipo == TipoCampanha.voluntariado) _secaoTurnos(),
+            if (_tipo == TipoCampanha.doacao) _secaoItens(),
             const SizedBox(height: 20),
             const Text('Foto da Campanha', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 10),
@@ -155,6 +167,210 @@ class _NovaCampanhaSheetState extends State<_NovaCampanhaSheet> {
         ),
       ),
     );
+  }
+
+  // ---------- Turnos (voluntariado) ----------
+  Widget _secaoTurnos() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: 20),
+      Row(children: [
+        const Expanded(child: Text('Turnos e vagas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+        TextButton.icon(onPressed: () => _editarTurno(), icon: const Icon(Icons.add_rounded), label: const Text('Adicionar')),
+      ]),
+      if (_turnos.isEmpty)
+        const Text('Opcional: defina datas, horários e quantas pessoas cabem em cada turno. As horas do voluntário saem da duração.',
+            style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+      for (final (idx, t) in _turnos.indexed)
+        Card(
+          margin: const EdgeInsets.only(top: 6),
+          child: ListTile(
+            leading: const Icon(Icons.event_rounded, color: AppColors.primary),
+            title: Text(formatarTurno(t), style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text('${t.vagas} vagas${t.ocupadas > 0 ? ' • ${t.ocupadas} inscritos' : ''}'),
+            onTap: () => _editarTurno(idx),
+            trailing: IconButton(
+              tooltip: 'Remover',
+              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+              onPressed: () => setState(() => _turnos.removeAt(idx)),
+            ),
+          ),
+        ),
+    ]);
+  }
+
+  Future<void> _editarTurno([int? idx]) async {
+    final atual = idx == null ? null : _turnos[idx];
+    final amanha = DateTime.now().add(const Duration(days: 1));
+    var dia = atual?.inicio ?? DateTime(amanha.year, amanha.month, amanha.day);
+    var ini = atual == null ? const TimeOfDay(hour: 9, minute: 0) : TimeOfDay.fromDateTime(atual.inicio);
+    var fim = atual == null ? const TimeOfDay(hour: 12, minute: 0) : TimeOfDay.fromDateTime(atual.fim);
+    final vagas = TextEditingController(text: '${atual?.vagas ?? 10}');
+    String two(int n) => n.toString().padLeft(2, '0');
+    final novo = await showDialog<Turno>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text(idx == null ? 'Novo turno' : 'Editar turno'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_month_rounded),
+              title: Text(formatarData(dia)),
+              onTap: () async {
+                final d = await showDatePicker(context: ctx, initialDate: dia, firstDate: DateTime.now().subtract(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 365)));
+                if (d != null) setD(() => dia = d);
+              },
+            ),
+            Row(children: [
+              Expanded(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.schedule_rounded),
+                  title: Text('${two(ini.hour)}:${two(ini.minute)}'),
+                  subtitle: const Text('Início'),
+                  onTap: () async {
+                    final t = await showTimePicker(context: ctx, initialTime: ini);
+                    if (t != null) setD(() => ini = t);
+                  },
+                ),
+              ),
+              Expanded(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('${two(fim.hour)}:${two(fim.minute)}'),
+                  subtitle: const Text('Fim'),
+                  onTap: () async {
+                    final t = await showTimePicker(context: ctx, initialTime: fim);
+                    if (t != null) setD(() => fim = t);
+                  },
+                ),
+              ),
+            ]),
+            TextField(
+              controller: vagas,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Vagas', prefixIcon: Icon(Icons.groups_outlined)),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () {
+                final i = DateTime(dia.year, dia.month, dia.day, ini.hour, ini.minute);
+                var f = DateTime(dia.year, dia.month, dia.day, fim.hour, fim.minute);
+                if (!f.isAfter(i)) f = f.add(const Duration(days: 1)); // turno que vira a noite
+                final v = int.tryParse(vagas.text.trim());
+                if (v == null || v < 1 || v > 500) {
+                  mostrarSnack(ctx, 'Informe de 1 a 500 vagas.', erro: true);
+                  return;
+                }
+                if (f.difference(i).inHours > 24) {
+                  mostrarSnack(ctx, 'O turno pode ter no máximo 24 horas.', erro: true);
+                  return;
+                }
+                Navigator.pop(ctx, Turno(id: atual?.id, inicio: i, fim: f, vagas: v, ocupadas: atual?.ocupadas ?? 0));
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+    vagas.dispose();
+    if (novo == null) return;
+    setState(() {
+      if (idx == null) {
+        _turnos.add(novo);
+      } else {
+        _turnos[idx] = novo;
+      }
+      _turnos.sort((a, b) => a.inicio.compareTo(b.inicio));
+    });
+  }
+
+  // ---------- Itens (doação) ----------
+  Widget _secaoItens() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: 20),
+      Row(children: [
+        const Expanded(child: Text('Itens e metas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+        TextButton.icon(onPressed: () => _editarItem(), icon: const Icon(Icons.add_rounded), label: const Text('Adicionar')),
+      ]),
+      if (_itens.isEmpty)
+        const Text('Opcional: liste o que precisa (ex.: Ração, 100 kg) e mostre o progresso da arrecadação.',
+            style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+      for (final (idx, it) in _itens.indexed)
+        Card(
+          margin: const EdgeInsets.only(top: 6),
+          child: ListTile(
+            leading: const Icon(Icons.inventory_2_outlined, color: Color(0xFFE8590C)),
+            title: Text(it.nome, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text('Meta: ${formatarQuantidade(it.meta)} ${it.unidade} • já tem ${formatarQuantidade(it.arrecadado)}'),
+            onTap: () => _editarItem(idx),
+            trailing: IconButton(
+              tooltip: 'Remover',
+              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+              onPressed: () => setState(() => _itens.removeAt(idx)),
+            ),
+          ),
+        ),
+    ]);
+  }
+
+  Future<void> _editarItem([int? idx]) async {
+    final atual = idx == null ? null : _itens[idx];
+    final nome = TextEditingController(text: atual?.nome ?? '');
+    final unidade = TextEditingController(text: atual?.unidade ?? 'un');
+    final meta = TextEditingController(text: atual == null ? '' : formatarQuantidade(atual.meta));
+    final tem = TextEditingController(text: atual == null ? '0' : formatarQuantidade(atual.arrecadado));
+    double? num(TextEditingController c) => double.tryParse(c.text.replaceAll(',', '.').trim());
+    final novo = await showDialog<ItemDoacao>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(idx == null ? 'Novo item' : 'Editar item'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nome, textCapitalization: TextCapitalization.sentences, decoration: const InputDecoration(labelText: 'Item (ex.: Ração)')),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: TextField(controller: meta, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Meta'))),
+              const SizedBox(width: 10),
+              SizedBox(width: 90, child: TextField(controller: unidade, decoration: const InputDecoration(labelText: 'Unidade'))),
+            ]),
+            const SizedBox(height: 8),
+            TextField(controller: tem, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Já arrecadado')),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () {
+              final m = num(meta);
+              if (nome.text.trim().isEmpty || m == null || m <= 0) {
+                mostrarSnack(ctx, 'Informe o nome do item e uma meta maior que zero.', erro: true);
+                return;
+              }
+              Navigator.pop(
+                ctx,
+                ItemDoacao(
+                  id: atual?.id,
+                  nome: nome.text.trim(),
+                  unidade: unidade.text.trim().isEmpty ? 'un' : unidade.text.trim(),
+                  meta: m,
+                  arrecadado: (num(tem) ?? 0).clamp(0, 1e6).toDouble(),
+                ),
+              );
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    for (final c in [nome, unidade, meta, tem]) {
+      c.dispose();
+    }
+    if (novo == null) return;
+    setState(() => idx == null ? _itens.add(novo) : _itens[idx] = novo);
   }
 
   Widget _tipoBtn(String tipo) {

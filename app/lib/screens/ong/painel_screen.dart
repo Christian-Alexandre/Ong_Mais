@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../widgets/campanha_extras.dart';
 import '../../widgets/comentarios_sheet.dart';
 import '../../widgets/common.dart';
 import '../../widgets/compartilhar.dart';
@@ -76,6 +77,18 @@ class PainelScreenState extends State<PainelScreen> {
       if (mounted) mostrarSnack(context, 'Campanha publicada com sucesso!');
       await recarregar();
       widget.onPerfilAlterado?.call();
+    }
+  }
+
+  Future<void> _atualizarItem(ItemDoacao item) async {
+    final v = await pedirArrecadado(context, item);
+    if (v == null || item.id == null) return;
+    try {
+      await ApiService.instance.atualizarArrecadado(item.id!, v);
+      if (mounted) mostrarSnack(context, 'Arrecadação de "${item.nome}" atualizada.');
+      await recarregar();
+    } catch (e) {
+      if (mounted) mostrarSnack(context, 'Erro ao atualizar: $e', erro: true);
     }
   }
 
@@ -162,6 +175,8 @@ class PainelScreenState extends State<PainelScreen> {
                           final total = await abrirComentarios(context, c);
                           if (total != null && mounted) setState(() => c.comentarios = total);
                         },
+                        onItem: (item) => _atualizarItem(item),
+                        temPix: (_ong?.chavePix ?? '').isNotEmpty,
                       ),
                       const SizedBox(height: 14),
                     ],
@@ -266,7 +281,17 @@ class _CardCampanhaOng extends StatelessWidget {
   final VoidCallback onExcluir;
   final VoidCallback onGerenciar;
   final VoidCallback onComentarios;
-  const _CardCampanhaOng({required this.campanha, required this.onEditar, required this.onExcluir, required this.onGerenciar, required this.onComentarios});
+  final void Function(ItemDoacao) onItem;
+  final bool temPix;
+  const _CardCampanhaOng({
+    required this.campanha,
+    required this.onEditar,
+    required this.onExcluir,
+    required this.onGerenciar,
+    required this.onComentarios,
+    required this.onItem,
+    required this.temPix,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -326,6 +351,10 @@ class _CardCampanhaOng extends StatelessWidget {
             _numero(Icons.calendar_today_outlined, formatarData(c.criadoEm), AppColors.textGrey),
           ]),
         ),
+        if (c.tipo == TipoCampanha.voluntariado && c.turnos.isNotEmpty)
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: ResumoTurnos(campanha: c)),
+        if (c.tipo == TipoCampanha.doacao && c.itens.isNotEmpty)
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: ProgressoDoacao(itens: c.itens, onEditar: onItem)),
         const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 0), child: Divider(height: 1)),
         InkWell(
           onTap: onComentarios,
@@ -347,10 +376,20 @@ class _CardCampanhaOng extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
               child: Row(children: [
-                const Icon(Icons.people_alt_outlined, color: AppColors.primary),
+                Badge(
+                  isLabelVisible: c.mensagensNaoLidas > 0,
+                  label: Text('${c.mensagensNaoLidas}'),
+                  child: const Icon(Icons.people_alt_outlined, color: AppColors.primary),
+                ),
                 const SizedBox(width: 8),
-                Text('Gerenciar Voluntários Inscritos${c.inscritos > 0 ? ' (${c.inscritos})' : ''}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 15)),
-                const Spacer(),
+                Expanded(
+                  child: Text(
+                    'Inscritos e conversas${c.inscritos > 0 ? ' (${c.inscritos})' : ''}',
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+                if (c.mensagensNaoLidas > 0)
+                  Text(c.mensagensNaoLidas == 1 ? '1 nova' : '${c.mensagensNaoLidas} novas', style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 13)),
                 const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
               ]),
             ),
@@ -359,6 +398,11 @@ class _CardCampanhaOng extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: Text('Contato dos interessados pelo WhatsApp.', style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+          ),
+        if (c.tipo == TipoCampanha.financeiro && !temPix)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Text('Dica: cadastre sua chave PIX em "Editar perfil" para os voluntários copiarem.', style: TextStyle(color: Color(0xFFE8590C), fontSize: 13)),
           ),
       ]),
     );

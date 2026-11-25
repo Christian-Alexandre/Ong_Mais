@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ong_mais/core/catalogo.dart';
+import 'package:ong_mais/core/certificado.dart';
 import 'package:ong_mais/core/utils.dart';
+import 'package:ong_mais/models/models.dart';
+import 'package:ong_mais/widgets/campanha_extras.dart';
 
 void main() {
   test('CNPJ do seed é válido e um inválido é rejeitado', () {
@@ -38,5 +41,38 @@ void main() {
     // todas as áreas do catálogo pertencem a uma única categoria
     final todas = areasPorCategoria.values.expand((l) => l).toList();
     expect(todas.toSet().length, todas.length);
+  });
+
+  test('Turnos, vagas e itens de doação vindos da API', () {
+    final c = Campanha.fromJson({
+      'id': 1,
+      'ong_id': 2,
+      'tipo': 'VOLUNTARIADO',
+      'titulo': 'Mutirão',
+      'turnos': [
+        {'id': 5, 'inicio': '2030-01-05T12:00:00Z', 'fim': '2030-01-05T15:00:00Z', 'vagas': 2, 'ocupadas': 2, 'horas': 3, 'encerrado': false},
+        {'id': 6, 'inicio': '2020-01-05T12:00:00Z', 'fim': '2020-01-05T15:00:00Z', 'vagas': 2, 'ocupadas': 0, 'horas': 3, 'encerrado': true},
+      ],
+      'itens': [
+        {'id': 1, 'nome': 'Ração', 'unidade': 'kg', 'meta': 100, 'arrecadado': 40},
+      ],
+    });
+    expect(c.turnosAbertos.length, 1);
+    expect(c.turnosAbertos.first.lotado, isTrue);
+    expect(rotuloVagas(c.turnosAbertos.first), 'Lotado');
+    expect(c.itens.first.progresso, closeTo(0.4, 1e-9));
+    expect(formatarQuantidade(2.5), '2,5');
+    expect(c.turnos.first.toJson()['inicio'], '2030-01-05T12:00:00.000Z');
+  });
+
+  test('Certificado em PDF (com acentos) é gerado', () async {
+    final v = Voluntario.fromJson({'id': 2, 'nome_completo': 'João Ação', 'horas_trabalhadas': 7, 'acoes_apoiadas': 2});
+    final insc = [
+      Inscricao.fromJson({'id': 1, 'campanha_id': 1, 'voluntario_id': 2, 'status': 'CONCLUIDO', 'horas': 3, 'campanha_titulo': 'Mutirão de Limpeza', 'ong_nome': 'Instituto Patinhas Carentes'}),
+      Inscricao.fromJson({'id': 2, 'campanha_id': 2, 'voluntario_id': 2, 'status': 'CONCLUIDO', 'horas': 4, 'campanha_titulo': 'Feira de Adoção', 'ong_nome': 'Instituto Patinhas Carentes'}),
+    ];
+    final bytes = await gerarCertificadoPdf(v, insc);
+    expect(String.fromCharCodes(bytes.take(4)), '%PDF');
+    expect(somenteLetras('João Ação'), 'joao');
   });
 }

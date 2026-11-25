@@ -118,15 +118,28 @@ class ApiService {
     return (r as List).map((e) => Campanha.fromJson(e)).toList();
   }
 
-  Future<Campanha> criarCampanha({required String tipo, required String titulo, String? descricao, String? fotoBase64}) async {
+  Future<Campanha> criarCampanha({
+    required String tipo,
+    required String titulo,
+    String? descricao,
+    String? fotoBase64,
+    List<Turno> turnos = const [],
+    List<ItemDoacao> itens = const [],
+  }) async {
     final r = await _api.post('/campanhas', {
       'tipo': tipo,
       'titulo': titulo.trim(),
       'descricao': descricao?.trim(),
       'foto_base64': fotoBase64,
+      'turnos': turnos.map((t) => t.toJson()).toList(),
+      'itens': itens.map((i) => i.toJson()).toList(),
     });
     return Campanha.fromJson(r);
   }
+
+  /// ONG informa quanto já chegou de um item de doação.
+  Future<ItemDoacao> atualizarArrecadado(int itemId, double arrecadado) async =>
+      ItemDoacao.fromJson(await _api.patch('/campanhas/itens/$itemId', {'arrecadado': arrecadado}));
 
   Future<Campanha> editarCampanha(int id, Map<String, dynamic> dados) async =>
       Campanha.fromJson(await _api.put('/campanhas/$id', dados));
@@ -150,8 +163,8 @@ class ApiService {
 
   Future<void> apagarComentario(int id) => _api.delete('/campanhas/comentarios/$id');
 
-  Future<Inscricao> inscrever(int campanhaId) async =>
-      Inscricao.fromJson(await _api.post('/campanhas/$campanhaId/inscricoes'));
+  Future<Inscricao> inscrever(int campanhaId, {int? turnoId}) async => Inscricao.fromJson(
+      await _api.post('/campanhas/$campanhaId/inscricoes', {if (turnoId != null) 'turno_id': turnoId}));
 
   Future<List<Inscricao>> inscritosDaCampanha(int campanhaId) async {
     final r = await _api.get('/campanhas/$campanhaId/inscricoes');
@@ -168,4 +181,19 @@ class ApiService {
 
   Future<Inscricao> atualizarInscricao(int id, String status, {int? horas}) async =>
       Inscricao.fromJson(await _api.patch('/inscricoes/$id', {'status': status, if (horas != null) 'horas': horas}));
+
+  // ---------- Conversa ----------
+  /// Mensagens da inscrição (marca as recebidas como lidas) + dados da inscrição.
+  Future<(Inscricao, List<Mensagem>)> conversa(int inscricaoId) async {
+    final r = await _api.get('/inscricoes/$inscricaoId/mensagens');
+    return (
+      Inscricao.fromJson(Map<String, dynamic>.from(r['inscricao'])),
+      (r['mensagens'] as List).map((e) => Mensagem.fromJson(Map<String, dynamic>.from(e))).toList(),
+    );
+  }
+
+  Future<Mensagem> enviarMensagem(int inscricaoId, String texto) async =>
+      Mensagem.fromJson(await _api.post('/inscricoes/$inscricaoId/mensagens', {'texto': texto.trim()}));
+
+  Future<int> mensagensNaoLidas() async => ((await _api.get('/inscricoes/nao-lidas'))['total'] as num).toInt();
 }

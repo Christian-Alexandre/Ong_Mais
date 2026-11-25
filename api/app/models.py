@@ -1,4 +1,5 @@
 """Modelo de dados do ONG Mais (ver ONG_MAIS_ESPECIFICACAO.md, seção "Modelo de dados")."""
+import math
 from datetime import datetime, timezone
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
@@ -68,6 +69,7 @@ class Ong(db.Model):
     logo_base64: Mapped[str | None] = mapped_column(BigText)
     # Áreas de atuação dentro da categoria (ex.: Animais -> Adoção, Resgate de animais)
     areas_atuacao: Mapped[list | None] = mapped_column(JSON, default=list)
+    chave_pix: Mapped[str | None] = mapped_column(String(120))  # mostrada em campanhas financeiras
 
     usuario: Mapped[Usuario] = relationship(back_populates="ong")
     campanhas: Mapped[list["Campanha"]] = relationship(back_populates="ong", cascade="all, delete-orphan")
@@ -80,6 +82,7 @@ class Ong(db.Model):
             "cnpj": self.cnpj,
             "categoria": self.categoria,
             "areas_atuacao": self.areas_atuacao or [],
+            "chave_pix": self.chave_pix,
             "whatsapp": self.whatsapp,
             "endereco": self.endereco,
             "latitude": self.latitude,
@@ -135,6 +138,12 @@ class Campanha(db.Model):
     comentarios: Mapped[list["Comentario"]] = relationship(
         back_populates="campanha", cascade="all, delete-orphan", order_by="Comentario.criado_em"
     )
+    turnos: Mapped[list["Turno"]] = relationship(
+        back_populates="campanha", cascade="all, delete-orphan", order_by="Turno.inicio"
+    )
+    itens: Mapped[list["ItemDoacao"]] = relationship(
+        back_populates="campanha", cascade="all, delete-orphan", order_by="ItemDoacao.id"
+    )
 
     def to_dict(self, voluntario_id: int | None = None, incluir_foto: bool = True) -> dict:
         minha_inscricao = None
@@ -164,6 +173,9 @@ class Campanha(db.Model):
             "inscritos": len(self.inscricoes),
             "comentarios": len(self.comentarios),
             "minha_inscricao": minha_inscricao,
+            "ong_chave_pix": self.ong.chave_pix if self.ong else None,
+            "turnos": [t.to_dict() for t in self.turnos],
+            "itens": [i.to_dict() for i in self.itens],
         }
 
 
@@ -180,13 +192,18 @@ class Inscricao(db.Model):
     status: Mapped[str] = mapped_column(String(20), default=STATUS_PENDENTE, nullable=False)
     horas: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    turno_id: Mapped[int | None] = mapped_column(ForeignKey("tb_turnos.id", ondelete="SET NULL"), index=True)
 
     campanha: Mapped[Campanha] = relationship(back_populates="inscricoes")
     voluntario: Mapped[Voluntario] = relationship(back_populates="inscricoes")
+    turno: Mapped["Turno | None"] = relationship(back_populates="inscricoes")
+    mensagens: Mapped[list["Mensagem"]] = relationship(
+        back_populates="inscricao", cascade="all, delete-orphan", order_by="Mensagem.criado_em"
+    )
 
     __table_args__ = (db.UniqueConstraint("campanha_id", "voluntario_id", name="uq_inscricao_campanha_voluntario"),)
 
-    def to_dict(self, incluir_campanha: bool = True, incluir_voluntario: bool = False) -> dict:
+    def to_dict(self, incluir_campanha: bool = True, incluir_voluntario: bool = False, leitor_id: int | None = None) -> dict:
         d = {
             "id": self.id,
             "campanha_id": self.campanha_id,
@@ -194,12 +211,23 @@ class Inscricao(db.Model):
             "status": self.status,
             "horas": self.horas,
             "criado_em": iso_utc(self.criado_em),
+            "turno": self.turno.to_dict(com_ocupacao=False) if self.turno else None,
         }
+        if leitor_id is not None:
+            # conversa: não lidas para quem está vendo + prévia da última mensagem
+            d["mensagens_nao_lidas"] = sum(1 for m in self.mensagens if m.autor_id != leitor_id and m.lida_em is None)
+            ultima = self.mensagens[-1] if self.mensagens else None
+            d["ultima_mensagem"] = (
+                {"texto": ultima.texto, "criado_em": iso_utc(ultima.criado_em), "minha": ultima.autor_id == leitor_id}
+                if ultima else None
+            )
         if incluir_campanha and self.campanha:
             d["campanha_titulo"] = self.campanha.titulo
             d["campanha_tipo"] = self.campanha.tipo
             d["ong_nome"] = self.campanha.ong.nome_fantasia if self.campanha.ong else None
             d["ong_whatsapp"] = self.campanha.ong.whatsapp if self.campanha.ong else None
+            d["ong_id"] = self.campanha.ong_id
+            d["ong_logo_base64"] = self.campanha.ong.logo_base64 if self.campanha.ong else None
         if incluir_voluntario and self.voluntario:
             d["voluntario_nome"] = self.voluntario.nome_completo
             d["voluntario_email"] = self.voluntario.usuario.email if self.voluntario.usuario else None
@@ -259,4 +287,90 @@ class Comentario(db.Model):
             "criado_em": iso_utc(self.criado_em),
             # pode apagar: o autor ou a ONG dona da campanha (moderação)
             "pode_apagar": usuario_logado is not None and usuario_logado in (self.usuario_id, dono_campanha),
+        }
+
+
+class Turno(db.Model):
+    """Turno de uma campanha de voluntariado: data/horário e número de vagas."""
+
+    __tablename__ = "tb_turnos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campanha_id: Mapped[int] = mapped_column(ForeignKey("tb_campanhas.id", ondelete="CASCADE"), nullable=False, index=True)
+    inicio: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # UTC
+    fim: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # UTC
+    vagas: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    campanha: Mapped[Campanha] = relationship(back_populates="turnos")
+    inscricoes: Mapped[list[Inscricao]] = relationship(back_populates="turno")
+
+    @property
+    def ocupadas(self) -> int:
+        return sum(1 for i in self.inscricoes if i.status != STATUS_RECUSADO)
+
+    @property
+    def horas(self) -> int:
+        """Duração arredondada para cima (2h30 -> 3h), usada ao concluir a participação."""
+        return max(1, math.ceil((self.fim - self.inicio).total_seconds() / 3600))
+
+    def encerrado(self, agora: datetime | None = None) -> bool:
+        agora = (agora or utcnow()).replace(tzinfo=None)
+        return self.fim.replace(tzinfo=None) <= agora
+
+    def to_dict(self, com_ocupacao: bool = True) -> dict:
+        d = {"id": self.id, "inicio": iso_utc(self.inicio), "fim": iso_utc(self.fim), "vagas": self.vagas, "horas": self.horas}
+        if com_ocupacao:
+            d["ocupadas"] = self.ocupadas
+            d["encerrado"] = self.encerrado()
+        return d
+
+
+class Mensagem(db.Model):
+    """Conversa entre voluntário e ONG dentro de uma inscrição."""
+
+    __tablename__ = "tb_mensagens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    inscricao_id: Mapped[int] = mapped_column(ForeignKey("tb_inscricoes.id", ondelete="CASCADE"), nullable=False, index=True)
+    autor_id: Mapped[int] = mapped_column(ForeignKey("tb_usuarios.id", ondelete="CASCADE"), nullable=False)
+    texto: Mapped[str] = mapped_column(Text, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    lida_em: Mapped[datetime | None] = mapped_column(DateTime)
+
+    inscricao: Mapped[Inscricao] = relationship(back_populates="mensagens")
+
+    def to_dict(self, leitor_id: int | None = None) -> dict:
+        return {
+            "id": self.id,
+            "inscricao_id": self.inscricao_id,
+            "autor_id": self.autor_id,
+            "texto": self.texto,
+            "criado_em": iso_utc(self.criado_em),
+            "lida": self.lida_em is not None,
+            "minha": leitor_id is not None and self.autor_id == leitor_id,
+        }
+
+
+class ItemDoacao(db.Model):
+    """Item que uma campanha de doação precisa, com meta e quanto já foi arrecadado."""
+
+    __tablename__ = "tb_itens_doacao"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campanha_id: Mapped[int] = mapped_column(ForeignKey("tb_campanhas.id", ondelete="CASCADE"), nullable=False, index=True)
+    nome: Mapped[str] = mapped_column(String(80), nullable=False)
+    unidade: Mapped[str] = mapped_column(String(20), nullable=False, default="un")
+    meta: Mapped[float] = mapped_column(Float, nullable=False)
+    arrecadado: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+
+    campanha: Mapped[Campanha] = relationship(back_populates="itens")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "unidade": self.unidade,
+            "meta": self.meta,
+            "arrecadado": self.arrecadado,
+            "percentual": min(100, round(100 * self.arrecadado / self.meta)) if self.meta else 0,
         }

@@ -4,8 +4,8 @@
 
 Aplicativo Android que conecta voluntários a ONGs por geolocalização. A ONG publica campanhas
 (voluntariado, doação ou financeiro); o voluntário encontra pelo feed ou pelo mapa, toca em
-**Quero Ajudar** e fala com a ONG pelo WhatsApp; a ONG aprova, recusa ou conclui a inscrição
-registrando as horas doadas. Voluntários comentam nas campanhas e a ONG responde e modera os
+**Quero Ajudar**, escolhe um turno e conversa com a ONG pelo chat do app (ou pelo WhatsApp, se
+preferir); a ONG aprova, recusa ou conclui a inscrição registrando as horas doadas. Voluntários comentam nas campanhas e a ONG responde e modera os
 comentários pelo próprio painel. Especificação: `ONG_MAIS_ESPECIFICACAO.md`.
 
 | Pasta  | O que é | Detalhes |
@@ -15,8 +15,15 @@ comentários pelo próprio painel. Especificação: `ONG_MAIS_ESPECIFICACAO.md`.
 
 ## Funcionalidades
 
-- **Voluntário:** feed com busca e filtros, curtir, comentar, compartilhar, **Quero Ajudar** (inscrição +
-  WhatsApp), mapa de ONGs por distância, perfil com foto, interesses e horas doadas.
+- **Voluntário:** feed com busca e filtros, curtir, comentar, compartilhar, **Quero Ajudar** (escolhe o
+  turno, se inscreve e conversa com a ONG no app; o WhatsApp continua como opção), mapa de ONGs por
+  distância, perfil com foto, interesses, horas doadas e **certificado de horas em PDF**.
+- **Chat no app:** cada inscrição abre uma conversa voluntário ↔ ONG, com contador de não lidas,
+  confirmação de leitura e avisos automáticos quando a ONG aprova, recusa ou conclui.
+- **Turnos e vagas:** a ONG define data, horário e vagas de cada turno; turno lotado não aceita inscrição
+  e, ao concluir, as horas saem da duração do turno.
+- **Doações:** itens com meta e barra de progresso (a ONG atualiza o que já chegou) e chave PIX da ONG
+  com botão de copiar nas campanhas financeiras.
 - **Pontos em comum (estilo Tinder):** interesses do voluntário × categoria e áreas de atuação da ONG,
   destacados no feed, no perfil da ONG e no perfil do voluntário.
 - **ONG:** cadastro com CNPJ validado, telefone com DDD válido, áreas de atuação e endereço preenchido

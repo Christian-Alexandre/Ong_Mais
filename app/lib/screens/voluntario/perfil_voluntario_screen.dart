@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_service.dart';
+import '../../core/certificado.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
@@ -22,6 +23,26 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
   Voluntario? _vol;
   String? _erro;
   bool _salvando = false;
+  bool _gerandoCertificado = false;
+
+  Future<void> _certificado() async {
+    final v = _vol;
+    if (v == null) return;
+    setState(() => _gerandoCertificado = true);
+    try {
+      final concluidas = (await ApiService.instance.minhasInscricoes()).where((i) => i.status == 'CONCLUIDO' && i.horas > 0).toList();
+      if (!mounted) return;
+      if (concluidas.isEmpty) {
+        mostrarSnack(context, 'Você ainda não tem participações concluídas. Quando a ONG concluir sua participação, as horas entram no certificado.');
+        return;
+      }
+      await compartilharCertificado(v, concluidas);
+    } catch (e) {
+      if (mounted) mostrarSnack(context, 'Erro ao gerar o certificado: $e', erro: true);
+    } finally {
+      if (mounted) setState(() => _gerandoCertificado = false);
+    }
+  }
 
   @override
   void initState() {
@@ -141,6 +162,19 @@ class _PerfilVoluntarioScreenState extends State<PerfilVoluntarioScreen> {
                     const SizedBox(width: 16),
                     Expanded(child: _stat(Icons.timer_outlined, '${v.horasTrabalhadas}h', 'Horas Doadas')),
                   ]),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      leading: const CircleAvatar(backgroundColor: Color(0xFFE6F4EC), child: Icon(Icons.workspace_premium_rounded, color: AppColors.primary)),
+                      title: const Text('Certificado de horas', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('PDF com suas participações concluídas, para a faculdade ou o currículo.'),
+                      trailing: _gerandoCertificado
+                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.picture_as_pdf_outlined, color: AppColors.danger),
+                      onTap: _gerandoCertificado ? null : _certificado,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Card(
                     child: Padding(

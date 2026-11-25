@@ -6,8 +6,10 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../models/models.dart';
+import '../../widgets/campanha_extras.dart';
 import '../../widgets/common.dart';
 import '../../widgets/interesses.dart';
+import '../conversa_screen.dart';
 import 'perfil_voluntario_publico_screen.dart';
 
 /// Gerenciar Voluntários Inscritos: Aprovar / Recusar / Concluir (com horas).
@@ -64,14 +66,24 @@ class _GerenciarInscritosScreenState extends State<GerenciarInscritosScreen> {
     }
   }
 
+  Future<void> _conversar(Inscricao i) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => ConversaScreen(inscricaoId: i.id, souOng: true, tituloInicial: i.voluntarioNome)));
+    if (mounted) await _carregar();
+  }
+
   Future<int?> _pedirHoras(Inscricao i) async {
-    final ctrl = TextEditingController();
+    // Com turno, já sugere a duração dele
+    final ctrl = TextEditingController(text: i.turno != null ? '${i.turno!.horas}' : '');
     return showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Concluir participação'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('Quantas horas ${i.voluntarioNome} trabalhou nesta campanha?'),
+          if (i.turno != null) ...[
+            const SizedBox(height: 6),
+            Text('Turno: ${formatarTurno(i.turno!)}', style: const TextStyle(color: AppColors.textGrey, fontSize: 13)),
+          ],
           const SizedBox(height: 14),
           TextField(
             controller: ctrl,
@@ -103,7 +115,7 @@ class _GerenciarInscritosScreenState extends State<GerenciarInscritosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Voluntários Inscritos'),
+        title: const Text('Inscritos e conversas'),
         actions: [IconButton(onPressed: _carregar, icon: const Icon(Icons.refresh_rounded, color: AppColors.primary))],
       ),
       body: Column(children: [
@@ -118,6 +130,26 @@ class _GerenciarInscritosScreenState extends State<GerenciarInscritosScreen> {
             Expanded(child: Text(widget.campanha.titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textDark))),
           ]),
         ),
+        if (widget.campanha.turnos.isNotEmpty)
+          SizedBox(
+            height: 64,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+              children: [
+                for (final t in widget.campanha.turnos)
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFFDEE2E6)), borderRadius: BorderRadius.circular(12), color: Colors.white),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Text(formatarTurno(t), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text('${t.ocupadas}/${t.vagas} vagas preenchidas', style: TextStyle(fontSize: 12, color: t.lotado ? AppColors.danger : AppColors.textGrey)),
+                    ]),
+                  ),
+              ],
+            ),
+          ),
         Expanded(child: _corpo()),
       ]),
     );
@@ -164,7 +196,23 @@ class _GerenciarInscritosScreenState extends State<GerenciarInscritosScreen> {
                 if (comum.isNotEmpty) ...[SeloEmComum(quantidade: comum.length), const SizedBox(height: 8)],
                 ChipsInteresses(itens: i.voluntarioInteresses, emComum: comum, vazio: 'Sem interesses informados.'),
                 const SizedBox(height: 6),
+                if (i.turno != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(children: [
+                      const Icon(Icons.event_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(formatarTurno(i.turno!), style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w600, fontSize: 13)),
+                    ]),
+                  ),
                 Text('Inscrito em ${formatarDataHora(i.criadoEm)}${i.status == 'CONCLUIDO' ? ' • ${i.horas}h registradas' : ''}', style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => _conversar(i),
+                  icon: Badge(isLabelVisible: i.naoLidas > 0, label: Text('${i.naoLidas}'), child: const Icon(Icons.forum_outlined, size: 18)),
+                  label: Text(i.naoLidas > 0 ? 'Conversar (${i.naoLidas} nova${i.naoLidas > 1 ? 's' : ''})' : 'Conversar'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(42)),
+                ),
                 if (i.status == 'PENDENTE' || i.status == 'APROVADO') ...[
                   const SizedBox(height: 12),
                   Row(children: [
