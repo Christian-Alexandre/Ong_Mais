@@ -180,6 +180,7 @@ class Campanha(db.Model):
 
 
 class Inscricao(db.Model):
+    """Inscrição de um voluntário numa campanha. Concluída ou recusada, a conversa fica encerrada."""
     __tablename__ = "tb_inscricoes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -203,12 +204,17 @@ class Inscricao(db.Model):
 
     __table_args__ = (db.UniqueConstraint("campanha_id", "voluntario_id", name="uq_inscricao_campanha_voluntario"),)
 
+    @property
+    def conversa_encerrada(self) -> bool:
+        return self.status in (STATUS_CONCLUIDO, STATUS_RECUSADO)
+
     def to_dict(self, incluir_campanha: bool = True, incluir_voluntario: bool = False, leitor_id: int | None = None) -> dict:
         d = {
             "id": self.id,
             "campanha_id": self.campanha_id,
             "voluntario_id": self.voluntario_id,
             "status": self.status,
+            "conversa_encerrada": self.conversa_encerrada,
             "horas": self.horas,
             "criado_em": iso_utc(self.criado_em),
             "turno": self.turno.to_dict(com_ocupacao=False) if self.turno else None,

@@ -355,7 +355,7 @@ class _CardCampanha extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onAjudar,
               icon: Icon(inscrito ? Icons.forum_outlined : Icons.handshake_outlined, size: 20),
-              label: Text(inscrito ? 'Conversar' : 'Quero Ajudar'),
+              label: Text(!inscrito ? 'Quero Ajudar' : (c.minhaInscricao!.conversaEncerrada ? 'Ver conversa' : 'Conversar')),
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(0, 44),
                 padding: const EdgeInsets.symmetric(horizontal: 16),

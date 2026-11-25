@@ -39,6 +39,12 @@ $pastaRel = Join-Path $raiz 'releases'
 New-Item -ItemType Directory -Force $pastaRel | Out-Null
 Copy-Item $apk (Join-Path $pastaRel 'ONG_Mais.apk') -Force
 L "Copia para o GitHub: releases\ONG_Mais.apk" 'Green'
+# Copia para o site (pasta irma site_ong_mais\downloads), se existir
+$pastaSite = Join-Path (Split-Path $raiz -Parent) 'site_ong_mais\downloads'
+if (Test-Path $pastaSite) {
+    Copy-Item $apk (Join-Path $pastaSite 'ONG_Mais.apk') -Force
+    L "Copia para o site: $pastaSite\ONG_Mais.apk" 'Green'
+}
 
 # Instala nos aparelhos conectados
 $devs = adb devices | Select-String '\tdevice$' | ForEach-Object { ($_ -split '\t')[0] }

@@ -102,7 +102,7 @@ class MinhasInscricoesTab extends StatelessWidget {
                         label: Text('${insc.naoLidas}'),
                         child: const Icon(Icons.forum_outlined, size: 20),
                       ),
-                      label: const Text('Conversar'),
+                      label: Text(insc.conversaEncerrada ? 'Ver conversa' : 'Conversar'),
                       style: ElevatedButton.styleFrom(minimumSize: const Size(0, 42)),
                     ),
                   ),

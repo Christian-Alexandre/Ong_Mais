@@ -29,11 +29,11 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _entrar({String? email, String? senha}) async {
-    if (email == null && !_form.currentState!.validate()) return;
+  Future<void> _entrar() async {
+    if (!_form.currentState!.validate()) return;
     setState(() => _carregando = true);
     try {
-      await ApiService.instance.login(email ?? _email.text, senha ?? _senha.text);
+      await ApiService.instance.login(_email.text, _senha.text);
       if (!mounted) return;
       final s = Session.instance;
       final perfil = s.perfil ?? const <String, dynamic>{};
@@ -135,42 +135,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.login_rounded),
                 label: const Text('Entrar na Plataforma'),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F3F5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE1E5EA)),
-                ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('⚡ Teste Rápido (1-Clique):', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _carregando ? null : () => _entrar(email: 'contato@patinhascarentes.org.br', senha: '123456'),
-                        icon: const Icon(Icons.apartment_rounded, size: 20),
-                        label: const Text('Conta ONG'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _carregando ? null : () => _entrar(email: 'voluntario@teste.com', senha: '123456'),
-                        icon: const Icon(Icons.favorite_rounded, size: 20),
-                        label: const Text('Conta Voluntário'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          foregroundColor: AppColors.orange,
-                          side: const BorderSide(color: AppColors.orange, width: 1.5),
-                        ),
-                      ),
-                    ),
-                  ]),
-                ]),
               ),
               const SizedBox(height: 24),
               const Row(children: [

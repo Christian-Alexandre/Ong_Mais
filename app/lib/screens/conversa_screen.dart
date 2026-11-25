@@ -58,6 +58,7 @@ class _ConversaScreenState extends State<ConversaScreen> {
         _erro = null;
       });
       if (chegouNova) _rolarParaFim();
+      if (insc.conversaEncerrada) _timer?.cancel(); // nada mais vai chegar
     } catch (e) {
       if (mounted && !silencioso) setState(() => _erro = e.toString());
     }
@@ -81,6 +82,7 @@ class _ConversaScreenState extends State<ConversaScreen> {
       _rolarParaFim();
     } catch (e) {
       if (mounted) mostrarSnack(context, 'Erro ao enviar: $e', erro: true);
+      unawaited(_carregar(silencioso: true)); // a ONG pode ter encerrado a conversa
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
@@ -129,7 +131,7 @@ class _ConversaScreenState extends State<ConversaScreen> {
       body: Column(children: [
         if (i != null) _faixaStatus(i),
         Expanded(child: _lista()),
-        _campoTexto(),
+        if (i != null && i.conversaEncerrada) _avisoEncerrada(i) else _campoTexto(),
       ]),
     );
   }
@@ -174,6 +176,39 @@ class _ConversaScreenState extends State<ConversaScreen> {
           _Bolha(m: m),
         ]);
       },
+    );
+  }
+
+  Widget _avisoEncerrada(Inscricao i) {
+    final concluida = i.status == 'CONCLUIDO';
+    return SafeArea(
+      top: false,
+      child: Container(
+        width: double.infinity,
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.textGrey),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                concluida ? 'Conversa encerrada: participação concluída.' : 'Conversa encerrada: inscrição recusada.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textGrey, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ]),
+          if (!widget.souOng) ...[
+            const SizedBox(height: 8),
+            BotaoWhatsApp(
+              numero: i.ongWhatsapp,
+              rotulo: 'Ainda precisa falar com a ONG? WhatsApp',
+              mensagem: 'Olá, ${i.ongNome}! Participei da campanha "${i.campanhaTitulo}" pelo ONG Mais.',
+            ),
+          ],
+        ]),
+      ),
     );
   }
 

@@ -210,7 +210,9 @@ class _GerenciarInscritosScreenState extends State<GerenciarInscritosScreen> {
                 OutlinedButton.icon(
                   onPressed: () => _conversar(i),
                   icon: Badge(isLabelVisible: i.naoLidas > 0, label: Text('${i.naoLidas}'), child: const Icon(Icons.forum_outlined, size: 18)),
-                  label: Text(i.naoLidas > 0 ? 'Conversar (${i.naoLidas} nova${i.naoLidas > 1 ? 's' : ''})' : 'Conversar'),
+                  label: Text(i.naoLidas > 0
+                      ? 'Conversar (${i.naoLidas} nova${i.naoLidas > 1 ? 's' : ''})'
+                      : (i.conversaEncerrada ? 'Ver conversa (encerrada)' : 'Conversar')),
                   style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(42)),
                 ),
                 if (i.status == 'PENDENTE' || i.status == 'APROVADO') ...[

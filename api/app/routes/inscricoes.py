@@ -73,8 +73,8 @@ def atualizar_status(inscricao_id: int):
     # Avisa o voluntário na conversa
     aviso = {
         STATUS_APROVADO: "✅ Sua inscrição foi aprovada! Qualquer dúvida, é só responder por aqui.",
-        STATUS_RECUSADO: "Sua inscrição não foi aprovada desta vez. Obrigado pelo interesse!",
-        STATUS_CONCLUIDO: f"🎉 Participação concluída: {insc.horas}h registradas no seu perfil. Muito obrigado!",
+        STATUS_RECUSADO: "Sua inscrição não foi aprovada desta vez. Obrigado pelo interesse! Esta conversa foi encerrada.",
+        STATUS_CONCLUIDO: f"🎉 Participação concluída: {insc.horas}h registradas no seu perfil. Muito obrigado! Esta conversa foi encerrada.",
     }[novo]
     insc.mensagens.append(Mensagem(autor_id=usuario_id_atual(), texto=aviso))
     db.session.commit()
@@ -122,6 +122,9 @@ def enviar_mensagem(inscricao_id: int):
     insc, err = _inscricao_da_conversa(inscricao_id)
     if err:
         return err
+    if insc.conversa_encerrada:
+        motivo = "a participação foi concluída" if insc.status == STATUS_CONCLUIDO else "a inscrição foi recusada"
+        return erro(f"Esta conversa foi encerrada porque {motivo}.", 409)
     dados, err = validar(MensagemSchema(), request.get_json(silent=True))
     if err:
         return err

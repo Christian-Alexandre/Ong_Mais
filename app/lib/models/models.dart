@@ -313,6 +313,9 @@ class Inscricao {
     this.ongLogoBase64,
   });
 
+  /// Concluída ou recusada: a conversa fica só para leitura.
+  bool get conversaEncerrada => status == 'CONCLUIDO' || status == 'RECUSADO';
+
   bool get pendente => status == 'PENDENTE';
 
   factory Inscricao.fromJson(Map<String, dynamic> j) => Inscricao(

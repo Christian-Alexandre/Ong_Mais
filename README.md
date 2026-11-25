@@ -19,7 +19,8 @@ comentários pelo próprio painel. Especificação: `ONG_MAIS_ESPECIFICACAO.md`.
   turno, se inscreve e conversa com a ONG no app; o WhatsApp continua como opção), mapa de ONGs por
   distância, perfil com foto, interesses, horas doadas e **certificado de horas em PDF**.
 - **Chat no app:** cada inscrição abre uma conversa voluntário ↔ ONG, com contador de não lidas,
-  confirmação de leitura e avisos automáticos quando a ONG aprova, recusa ou conclui.
+  confirmação de leitura e avisos automáticos quando a ONG aprova, recusa ou conclui. Ao concluir
+  ou recusar, a conversa é encerrada (fica só para leitura).
 - **Turnos e vagas:** a ONG define data, horário e vagas de cada turno; turno lotado não aceita inscrição
   e, ao concluir, as horas saem da duração do turno.
 - **Doações:** itens com meta e barra de progresso (a ONG atualiza o que já chegou) e chave PIX da ONG
@@ -42,7 +43,9 @@ Documentação do projeto: `apresentacao_mobile.docx`.
    em suspensão. Fechar a janela tira o app do ar fora de casa.
 2. Instalar o **`ONG_Mais.apk`** no celular. Ele já aponta para o endereço do ngrok, então funciona
    no 4G ou em qualquer Wi-Fi.
-3. Na tela de login: **Teste Rápido (1-Clique)** → Conta ONG / Conta Voluntário.
+3. Entrar com e-mail e senha. Contas de teste (senha `123456`): `contato@patinhascarentes.org.br`
+   (ONG) e `voluntario@teste.com` (voluntário). ONGs reais de Goiânia para demonstração:
+   `api/scripts/ongs_goiania.py` (contas `*@goiania.demo`).
 
 A **engrenagem** na tela de login troca o servidor sem gerar outro APK: deixe em branco para usar o
 endereço do ngrok ou digite o IP do PC (ex.: `192.168.0.10`) para usar só na rede local, com
@@ -55,7 +58,8 @@ endereço do ngrok ou digite o IP do PC (ex.: `192.168.0.10`) para usar só na r
 | `iniciar_tunel.cmd` | API + túnel ngrok (instala/atualiza o ngrok e pede o authtoken na 1ª vez) |
 | `iniciar_api.cmd` | Só a API, na rede local; aplica as migrações do MySQL ao subir (log em `api_log.txt`) |
 | `atualizar_api.cmd` | Reinicia a API para carregar código novo, sem apagar dados (o túnel pode ficar aberto) |
-| `gerar_apk.cmd` | Gera o `ONG_Mais.apk` de release e instala nos aparelhos conectados |
+| `gerar_apk.cmd` | Gera o `ONG_Mais.apk` de release, copia para `releases\` e para `..\site_ong_mais\downloads\` (se existir) e instala nos aparelhos conectados |
+| `iniciar_emulador.cmd` | Liga o emulador, instala o `ONG_Mais.apk` e abre o app (`reiniciar_emulador.cmd` desliga e liga de novo) |
 | `app_celular.cmd` | Roda o app em modo de desenvolvimento (celular USB ou emulador) |
 | `limpar_dados.cmd` | Volta o banco ao estado inicial (só as contas de teste) |
 | `configurar_mysql.cmd` | Cria banco, usuário, `api/.env`, migrações e seed no MySQL |

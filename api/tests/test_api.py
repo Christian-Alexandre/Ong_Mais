@@ -296,15 +296,21 @@ def test_cadastro_voluntario_com_foto_e_interesses(client):
 
 def test_chat_da_inscricao(client):
     ong = _login(client, "contato@patinhascarentes.org.br")
-    vol = _login(client, "voluntario@teste.com")
-    insc = client.get("/inscricoes/minhas", headers=vol).get_json()[0]
-    iid = insc["id"]
+    r = client.post("/auth/registro/voluntario", json={"nome_completo": "Ana Chat", "email": "ana@chat.com", "senha": "123456"})
+    vol = {"Authorization": f"Bearer {r.get_json()['access_token']}"}
+    camp = next(c for c in client.get("/campanhas", headers=vol).get_json() if c["tipo"] == "VOLUNTARIADO")
+    turno = next(t for t in camp["turnos"] if t["ocupadas"] < t["vagas"])
+    r = client.post(f"/campanhas/{camp['id']}/inscricoes", json={"turno_id": turno["id"]}, headers=vol)
+    assert r.status_code == 201
+    iid = r.get_json()["id"]
 
     # a inscrição já abriu a conversa; ONG tem mensagens não lidas
-    assert client.get("/inscricoes/nao-lidas", headers=ong).get_json()["total"] >= 1
+    antes = client.get("/inscricoes/nao-lidas", headers=ong).get_json()["total"]
+    assert antes >= 1
     r = client.get(f"/inscricoes/{iid}/mensagens", headers=ong)
     assert r.status_code == 200 and r.get_json()["mensagens"][0]["texto"].startswith("Olá! Quero ajudar")
-    assert client.get("/inscricoes/nao-lidas", headers=ong).get_json()["total"] == 0  # leu ao abrir
+    assert r.get_json()["inscricao"]["conversa_encerrada"] is False
+    assert client.get("/inscricoes/nao-lidas", headers=ong).get_json()["total"] == antes - 1  # leu ao abrir
 
     # ONG responde; voluntário vê como não lida, depois lida
     r = client.post(f"/inscricoes/{iid}/mensagens", json={"texto": "Te esperamos às 9h!"}, headers=ong)
@@ -319,6 +325,13 @@ def test_chat_da_inscricao(client):
     r = client.post("/auth/registro/voluntario", json={"nome_completo": "Intruso", "email": "intruso@x.com", "senha": "123456"})
     intruso = {"Authorization": f"Bearer {r.get_json()['access_token']}"}
     assert client.get(f"/inscricoes/{iid}/mensagens", headers=intruso).status_code == 404
+
+    # recusada: a conversa encerra e ninguém mais escreve
+    assert client.patch(f"/inscricoes/{iid}", json={"status": "RECUSADO"}, headers=ong).status_code == 200
+    r = client.get(f"/inscricoes/{iid}/mensagens", headers=vol).get_json()
+    assert r["inscricao"]["conversa_encerrada"] is True and "encerrada" in r["mensagens"][-1]["texto"]
+    r = client.post(f"/inscricoes/{iid}/mensagens", json={"texto": "Por quê?"}, headers=vol)
+    assert r.status_code == 409 and "recusada" in r.get_json()["erro"]
 
 
 def test_turnos_lotacao_e_horas(client):
@@ -356,6 +369,11 @@ def test_turnos_lotacao_e_horas(client):
     assert r.status_code == 200 and r.get_json()["horas"] == 3
     msgs = client.get(f"/inscricoes/{iid}/mensagens", headers=a).get_json()["mensagens"]
     assert "aprovada" in msgs[1]["texto"] and "3h" in msgs[2]["texto"]
+    # concluída: conversa encerrada para os dois lados
+    r = client.get(f"/inscricoes/{iid}/mensagens", headers=a).get_json()
+    assert r["inscricao"]["conversa_encerrada"] is True
+    assert client.post(f"/inscricoes/{iid}/mensagens", json={"texto": "oi"}, headers=a).status_code == 409
+    assert client.post(f"/inscricoes/{iid}/mensagens", json={"texto": "oi"}, headers=ong).status_code == 409
 
     # editar mantendo o turno pelo id não perde a inscrição; remover o turno solta a inscrição
     r = client.put(f"/campanhas/{camp['id']}", json={"turnos": [{**turno, "vagas": 5}]}, headers=ong)
